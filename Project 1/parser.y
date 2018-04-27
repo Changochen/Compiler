@@ -90,7 +90,7 @@ Program : ExtDefList { programBlock=*$1;}
         ;
 
 ExtDefList:/* */{$$=new ExtDefList();}
-          | ExtDef ExtDefList {$2->push_back(*$1);}
+          | ExtDef ExtDefList {$2->push_back($1);}
           ;
 /*
           | ExtDef {$$=new ExtDefList();$$->push_back(*$1);}
@@ -112,7 +112,7 @@ Specifier : TTYPE_INT {$$=new NSepcifier($1);}
           ;
 
 StructSpecifier:TSTRUCT OptTag TLC DefList TRC { $$=new NStructSpecifier(*$2,*$4);}
-               | TSTRUCT TID {$$=new NStructSpecifier(*$2);}
+               | TSTRUCT OptTag {$$=new NStructSpecifier(*$2);}
           ;
 
 OptTag : /* blank */ {}
@@ -127,8 +127,8 @@ FuncDec : TID TLP VarList TRP {$$=new NFuncDec(*$1,*$3);}
         | TID TLP TRP {$$=new NFuncDec(*$1);}
        ;
 
-VarList :ParamDec TCOMMA VarList {$3->push_back(*$1);}
-        |ParamDec {$$=new Varlist();$$->push_back(*$1);}
+VarList :ParamDec TCOMMA VarList {$3->push_back($1);}
+        |ParamDec {$$=new Varlist();$$->push_back($1);}
        ;
 
 ParamDec: Specifier VarDec {$$=new ParamDec(*$1,*$2);}
@@ -138,7 +138,7 @@ CompSt : TLC DefList StmtList TRC {$$=new NCompSt();$$->add(*$1,*$2);}
        ;
 
 StmtList :/* blank */ {$$=new StmtList();}
-         | Stmt StmtList {$2->push_back(*$1);}
+         | Stmt StmtList {$2->push_back($1);}
          ;
 
 Stmt  : Exp TSEMI {$$=new NExp(*$1);}
@@ -150,14 +150,14 @@ Stmt  : Exp TSEMI {$$=new NExp(*$1);}
       ;
 
 DefList:/*blank */ {$$=new DefList();} 
-       | Def DefList {$2->push_back(*$1);}
+       | Def DefList {$2->push_back($1);}
        ;
 
 Def  :Specifier DecList TSEMI {$$=new NDef(*$1,*$2);}
      ;
 
-DecList : Dec {$$=new DecList();$$->push_back(*$1);}
-        | Dec TCOMMA DecList {$3->push_back(*$1);}
+DecList : Dec {$$=new DecList();$$->push_back($1);}
+        | Dec TCOMMA DecList {$3->push_back($1);}
         ;
 
 Dec    : VarDec {$$=new NDec(*$1);}
@@ -190,7 +190,7 @@ Exp  : Exp TASSIGN Exp { $$ = new NAssignment(*$1, *$3); }
      ;
 
 Args : Exp {$$=new ExpList();}
-     | Exp TCOMMA Args {$3->push_back(*$1);}
+     | Exp TCOMMA Args {$3->push_back($1);}
      ;
 
 %%
