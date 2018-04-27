@@ -8,6 +8,7 @@
 %}
 
 %option noyywrap
+%option yylineno
 
 %%
 
@@ -25,17 +26,18 @@
 [0-9]+\.[0-9]* 			    SAVE_TOKEN; return TFLOAT;
 [0-9]+					        SAVE_TOKEN; return TINT;
 
-"="						        return TOKEN(TASSINGOP);
-"=="				          	return TOKEN(TCEQ);
-"!="			          		return TOKEN(TCNE);
-"<"				          		return TOKEN(TCLT);
-"<="	          				return TOKEN(TCLE);
-">"				          		return TOKEN(TCGT);
-">="					        return TOKEN(TCGE);
+"="						        return TOKEN(TASSIGN);
+"=="				          	return TOKEN(TEQ);
+"!="			          		return TOKEN(TNE);
+"<"				          		return TOKEN(TLT);
+"<="	          				return TOKEN(TLE);
+">"				          		return TOKEN(TGT);
+">="					        return TOKEN(TGE);
 
 "!"                             return TOKEN(NOT);
 "&&"                            return TOKEN(AND);
 "||"                            return TOKEN(OR);
+
 "("	          					return TOKEN(TLP);
 ")"					          	return TOKEN(TRP);
 "{"         				    return TOKEN(TLC);
