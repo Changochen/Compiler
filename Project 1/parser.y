@@ -2,7 +2,7 @@
     #include "node.h"
     #include <cstdio>
     #include <cstdlib>
-    NBlock *programBlock; /* the top level root node of our final AST */
+    std::vector<NExtDef*>* programBlock; /* the top level root node of our final AST */
 
 extern int yylex();
     void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
@@ -10,21 +10,25 @@ extern int yylex();
 
 /* Represents the many different ways we can access our data */
 %union {
-    Node *node;
-    NBlock *block;
-    NExpression *expr;
-    NStatement *stmt;
-    NIdentifier *ident;
-    NDefinition* *def;
-    NFuncDefinition* *funcdef;
-    NParameter *para;
-    NVariableDeclaration *var_decl;
-    std::vector<NVariableDeclaration*> *varvec;
-    std::vector<NExpression*> *exprvec;
-    std::vector<NParameter*> *paravec;
-    std::vector<NDefinition*> *defs;
-    std::vector<NStatement*> *stmts;
-    std::string *string;
+    NStmt* Stmt;
+    NExp* Exp;
+    NSpecifier* Specifier;
+    NVarDec* VarDec;
+    NFuncDec* FuncDec;
+    NStructSpecifier* StructSpecifier;
+    NIdentifier* Identifier;
+    NDef* Def;
+    NParamDec* ParamDec;
+    NCompst* Compst;
+    NExtDef* ExtDef;
+    NDec* Dec;
+    std::vector<NStmt*>* StmtList;
+    std::vector<NExp*>* ExpList;
+    std::vector<NExtDef*>* ExtDefList;
+    std::vector<NDef*>* DefList;
+    std::vector<NDec*>* DecList;
+    std::vector<NVarDec*>* VarDeclist
+    std::vector<NParamDec*>* VarList;
     int token;
 }
 
@@ -46,131 +50,147 @@ extern int yylex();
    calling an (NIdentifier*). It makes the compiler happy.
  */
 
-%type <ident> ident optarg tag 
-%type <expr>  Exp Dec 
-%type <varvec> VarList
-%type <var_decl> VarDec
-%type <para> ParamDec
-%type <funcdef> FunDec
-%type <paravec> VarList
-%type <exprvec> Args DecList 
-%type <block> 
-%type <def> Def
-%type <defs> DefList
-%type <stmt> Stmt
-%type <stmts> StmtList CompSt
-%type <token> comparison logic mathop
+%type <Dec> Dec
+%type <Stmt> Stmt 
+%type <Exp>  Exp 
+%type <ExtDef> ExtDef
+%type <Specifier> Specifier
+%type <VarDec> VarDec
+%type <FuncDec> FuncDec
+%type <StructSpecifier> StructSpecifier
+%type <Identifier> OptTag
+%type <Def> Def
+%type <ParamDec> ParamDec
+%type <Compst> CompSt
+%type <StmtList> StmtList
+%type <ExtDefList> ExtDefList Program
+%type <DefList> DefList
+%type <DecList> DecList
+%type <VarList> VarList
+%type <VarDecList> ExtDecList
+%type <ExpList> Args
 
 /* Operator precedence for mathematical operators */
-//%left TAND TOR
-//%left TEQ TNE TLT TLE TGT TGE
+
+%right TCOMMA
+%right TASSIGN
+%left TAND TOR
+%left TEQ TNE TLT TLE TGT TGE
 %left TPLUS TMINUS
 %left TMUL TDIV
+%right TNOT
+%left TLP TRP TLB TRB TDOT
+%start Program
 
-%start program
+%nonassoc TELSE
 
 %%
 
-Program : ExtDefList { programBlock = $1; }
+Program : ExtDefList { programBlock=*$1;}
         ;
 
-ExtDefList:/* */{}
-          : ExtDef {}
-          : ExtDefList ExtDef {}
+ExtDefList:/* */{$$=new ExtDefList();}
+          | ExtDef ExtDefList {$2->push_back(*$1);}
+          ;
+/*
+          | ExtDef {$$=new ExtDefList();$$->push_back(*$1);}
+          | ExtDefList ExtDef {$1->push_back(*$2);}
+          ;
+*/
+ExtDef    : Specifier ExtDecList TSEMI {$$=new NExtDefNormal(*$1,*$2);}
+          | Specifier TSEMI {$$=new NExtDefNormal(*$1);}
+          | Specifier FuncDec CompSt {$$=new NExtDefFunc(*$1,*$2,*$3)}
           ;
 
-ExtDef    : Specifier ExtDecList TSEMI {}
-          : Specifier TSEMI {}
-          : Specifier FunDec CompSt {}
+ExtDecList: VarDec {$$=new VarDeclist();$$->push_back($1);}
+          | VarDec TCOMMA ExtDecList {$3->push_back($1);}
           ;
 
-ExtDecList: VarDec {}
-          : ExtDecList COMMA VarDec {}
+Specifier : TTYPE_INT {$$=new NSepcifier($1);}
+          | TTYPE_FLOAT {$$=new NSepcifier($1);}
+          | StructSpecifier {$$=new NSepcifier(*$1);}
           ;
 
-Specifier : TTYPE_INT {}
-          | TTYPE_FLOAT {}
-          | StructSpecifier {}
-          ;
-
-
-StructSpecifier:TSTRUCT OptTag LC DefList RC { $$=new NStructure(*$2,*$4);}
-          | TSTRUCT Ident {$$=new NStructure(*$2);}
+StructSpecifier:TSTRUCT OptTag TLC DefList TRC { $$=new NStructSpecifier(*$2,*$4);}
+               | TSTRUCT TID {$$=new NStructSpecifier(*$2);}
           ;
 
 OptTag : /* blank */ {}
-          | Ident { $$ = new NIdentifier(*$1);}
+       | TID { $$ = new NIdentifier(*$1);}
           ;
 
-VarDec : TID {}
-       | VarDec TLB TINT TRB {}
+VarDec : TID {$$=new NVarDec(*$1);}
+       | VarDec TLB TINT TRB {$$=new NVarDec(*$1,$3);}
        ;
 
-FunDec : TID TLP VarList TRP {}
-       | TID TLP TRP {}
+FuncDec : TID TLP VarList TRP {$$=new NFuncDec(*$1,*$3);}
+        | TID TLP TRP {$$=new NFuncDec(*$1);}
        ;
 
-VarList :ParamDec TCOMMA VarList {}
-       |ParamDec {}
+VarList :ParamDec TCOMMA VarList {$3->push_back(*$1);}
+        |ParamDec {$$=new Varlist();$$->push_back(*$1);}
        ;
 
-ParamDec: Specifier VarDec {}
+ParamDec: Specifier VarDec {$$=new ParamDec(*$1,*$2);}
         ;
 
-CompSt : TLC DefList StmtList TRC {}
+CompSt : TLC DefList StmtList TRC {$$=new NCompSt();$$->add(*$1,*$2);}
        ;
 
-StmtList :/* blank */ {}
-         | Stmt {}
-         | StmtList Stmt {}
+StmtList :/* blank */ {$$=new StmtList();}
+         | Stmt StmtList {$2->push_back(*$1);}
          ;
 
-Stmt  : Exp TSEMI {}
-      | CompSt {}
-      | TRETURN Exp TSEMI {}
-      | TIF TLP Exp TRP Stmt {}
-      | TIF TLP Exp TRP Stmt TELSE Stmt {}
-      | TWHILE TLP Exp TRP Stmt {}
+Stmt  : Exp TSEMI {$$=new NExp(*$1);}
+      | CompSt {$$=new CompSt(*$1);}
+      | TRETURN Exp TSEMI {$$=new NReturnStmt(*$2);}
+      | TIF TLP Exp TRP Stmt {$$=new NIfStmt(*$3,*$5);}
+      | TIF TLP Exp TRP Stmt TELSE Stmt {$$=new NIfStmt(*$3,*$5,*$7);}
+      | TWHILE TLP Exp TRP Stmt {$$=new NWhileStmt(*$3,*$5);}
       ;
 
-DefList:/*blank */ {} 
-       | Def {}
-       | DefList Def {}
+DefList:/*blank */ {$$=new DefList();} 
+       | Def DefList {$2->push_back(*$1);}
        ;
 
-Def  :Specifier DecList TSEMI {}
+Def  :Specifier DecList TSEMI {$$=new NDef(*$1,*$2);}
      ;
 
-DecList : Dec {}
-        | DecList TCOMMA Dec {}
+DecList : Dec {$$=new DecList();$$->push_back(*$1);}
+        | Dec TCOMMA DecList {$3->push_back(*$1);}
         ;
 
-Dec    : VarDec {}
-       | Exp TASSIGN VarDec {}
+Dec    : VarDec {$$=new NDec(*$1);}
+       | VarDec TASSIGN Exp {$$=new NDec(*$1,*$3);}
        ;
 
-Exp :  Exp TASSIGN Exp { $$ = new NAssignment(*$<ident>1, *$3); }
-     | Exp logic Exp {}
-     | Exp mathop Exp  {}
-     | Exp comparison Exp {}
-     | TLP Exp RLP {}
-     | TMINUS Exp {}
-     | TNOT Exp {}
-     | TID TLP Args TRP {}
-     | TID TLP TRP {}
-     | Exp TLB Exp TRB {}
+Exp  : Exp TASSIGN Exp { $$ = new NAssignment(*$1, *$3); }
+     | Exp TAND Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TOR Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TMUL Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TDIV Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TMINUS Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TPLUS Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TEQ Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TNE Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TLT Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TLE Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TGE Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | Exp TGT Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
+     | TLP Exp TRP {$$=*$2;}
+     | TMINUS Exp {$$=new NUnaryOperator(*$2,*$1);}
+     | TNOT Exp {$$=new NUnaryOperator(*$2,*$1);}
+     | TID TLP Args TRP {$$ = new NMethodCall(*$1, *$3);}
+     | TID TLP TRP {$$ = new NMethodCall(*$1);}
+     | Exp TLB Exp TRB {$$=new NArrayIndex(*$1,*$3);}
      | Exp TDOT TID {}
-     | TID {}
-     | TINT {}
-     | TFLOAT {}
+     | TID {$$=new NIdentifier(*$1);}
+     | TINT {$$ = new NInteger(atol($1->c_str()));}
+     | TFLOAT {$$ = new NDouble(atof($1->c_str()));}
      ;
 
-Args : Exp {}
-     | Args COMMA Exp {}
+Args : Exp {$$=new ExpList();}
+     | Exp TCOMMA Args {$3->push_back(*$1);}
      ;
-
-comparison : TEQ | TNE | TLT | TLE | TGT | TGE;
-mathop :TMUL | TDIV | TPLUS | TMINUS;
-logic : TAND | TOR;
 
 %%
