@@ -2,10 +2,11 @@
     #include "node.h"
     #include <cstdio>
     #include <cstdlib>
-    std::vector<NExtDef*>* programBlock; /* the top level root node of our final AST */
+    NBlock* programBlock; /* the top level root node of our final AST */
 
-extern int yylex();
-    void yyerror(const char *s) { std::printf("Error: %s\n", s);std::exit(1); }
+    extern int yylex();
+    extern int yylineno;
+    void yyerror(const char *s) { std::printf("Error type B at Line %d: \'%s\'\n", yylineno, s);std::exit(1); }
 %}
 
 /* Represents the many different ways we can access our data */
@@ -22,14 +23,15 @@ extern int yylex();
     NCompSt* Compst;
     NExtDef* ExtDef;
     NDec* Dec;
-    std::vector<NStmt*>* StmtList;
-    std::vector<NExp*>* ExpList;
-    std::vector<NExtDef*>* ExtDefList;
-    std::vector<NDef*>* DefList;
-    std::vector<NDec*>* DecList;
-    std::vector<NVarDec*>* VarDecList;
-    std::vector<NParamDec*>* VarList;
+    NStmtList* StmtList;
+    NExpList* ExpList;
+    NExtDefList* ExtDefList;
+    NDefList* DefList;
+    NDecList* DecList;
+    NVarDecList* VarDecList;
+    NVarList* VarList;
     std::string *string;
+    NBlock* Block;
     int token;
 }
 
@@ -64,7 +66,8 @@ extern int yylex();
 %type <ParamDec> ParamDec
 %type <Compst> CompSt
 %type <StmtList> StmtList
-%type <ExtDefList> ExtDefList Program
+%type <ExtDefList> ExtDefList
+%type <Block> Program
 %type <DefList> DefList
 %type <DecList> DecList
 %type <VarList> VarList
@@ -87,10 +90,10 @@ extern int yylex();
 
 %%
 
-Program : ExtDefList { programBlock=$1;}
+Program : ExtDefList {$$=new NBlock(*$1);programBlock=$$;}
         ;
 
-ExtDefList:/* */{$$=new ExtDefList();}
+ExtDefList:/* */{$$=new NExtDefList();}
           | ExtDef ExtDefList {$2->push_back($1);}
           ;
 
@@ -99,7 +102,7 @@ ExtDef    : Specifier ExtDecList TSEMI {$$=new NExtDefNormal(*$1,*$2);}
           | Specifier FuncDec CompSt {$$=new NExtDefFunc(*$1,*$2,*$3);}
           ;
 
-ExtDecList: VarDec {$$=new VarDecList();$$->push_back($1);}
+ExtDecList: VarDec {$$=new NVarDecList();$$->push_back($1);}
           | VarDec TCOMMA ExtDecList {$3->push_back($1);}
           ;
 
@@ -125,7 +128,7 @@ FuncDec : TID TLP VarList TRP {$$=new NFuncDec(*$1,*$3);}
        ;
 
 VarList :ParamDec TCOMMA VarList {$3->push_back($1);}
-        |ParamDec {$$=new VarList();$$->push_back($1);}
+        |ParamDec {$$=new NVarList();$$->push_back($1);}
        ;
 
 ParamDec: Specifier VarDec {$$=new NParamDec(*$1,*$2);}
@@ -134,7 +137,7 @@ ParamDec: Specifier VarDec {$$=new NParamDec(*$1,*$2);}
 CompSt : TLC DefList StmtList TRC {$$=new NCompSt();$$->add(*$2,*$3);}
        ;
 
-StmtList :/* blank */ {$$=new StmtList();}
+StmtList :/* blank */ {$$=new NStmtList();}
          | Stmt StmtList {$2->push_back($1);}
          ;
 
@@ -146,14 +149,14 @@ Stmt  : Exp TSEMI {$$=new NExp(*$1);}
       | TWHILE TLP Exp TRP Stmt {$$=new NWhileStmt(*$3,*$5);}
       ;
 
-DefList:/*blank */ {$$=new DefList();} 
+DefList:/*blank */ {$$=new NDefList();} 
        | Def DefList {$2->push_back($1);}
        ;
 
 Def  :Specifier DecList TSEMI {$$=new NDef(*$1,*$2);}
      ;
 
-DecList : Dec {$$=new DecList();$$->push_back($1);}
+DecList : Dec {$$=new NDecList();$$->push_back($1);}
         | Dec TCOMMA DecList {$3->push_back($1);}
         ;
 
@@ -182,11 +185,11 @@ Exp  : Exp TASSIGN Exp { $$ = new NAssignment(*$1, *$3); }
      | Exp TLB Exp TRB {$$=new NArrayIndex(*$1,*$3);}
      | Exp TDOT TID {}
      | TID {$$=new NIdentifier(*$1);}
-     | TINT {$$ = new NInteger(atol($1->c_str()));}
+     | TINT {$$ = new NInteger(*$1);}
      | TFLOAT {$$ = new NDouble(atof($1->c_str()));}
      ;
 
-Args : Exp {$$=new ExpList();}
+Args : Exp {$$=new NExpList();}
      | Exp TCOMMA Args {$3->push_back($1);}
      ;
 

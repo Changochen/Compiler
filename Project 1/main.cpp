@@ -7,7 +7,7 @@ using namespace std;
 extern int yyparse();
 extern int yylex();
 extern int yyrestart(FILE* f);
-
+extern NBlock* programBlock;
 //extern std::vector<NExtDef*>* programBlock;
 extern int yylineno;
 

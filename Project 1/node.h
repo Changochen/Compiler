@@ -3,6 +3,7 @@
 #include <string>
 #include <llvm/IR/Value.h>
 
+extern int yylineno;
 class NStmt;
 class NExp;
 class NSpecifier;
@@ -15,18 +16,16 @@ class NParamDec;
 class NCompSt;
 class NExtDef;
 class NDec;
-typedef std::vector<NStmt*> StmtList;
-typedef std::vector<NExp*> ExpList;
-typedef std::vector<NExtDef*> ExtDefList;
-typedef std::vector<NDef*> DefList;
-typedef std::vector<NDec*> DecList;
-typedef std::vector<NVarDec*> VarDecList;
-typedef std::vector<NParamDec*> VarList;
+class NStmtList;
+class NDefList;
+class NExpList;
+class NDecList;
+class NVarDecList;
+class NVarList;
 
 class Node {
-//public:
-//    virtual ~Node() {}
-//    virtual void print(){}
+public:
+    virtual void print(int i){}
 };
 
 static Node tmp;
@@ -35,11 +34,80 @@ class NExtDef : public Node{
 
 };
 
+class NExtDefList:public Node{
+public:
+    std::vector<NExtDef*> vec;
+    NExtDefList(){}
+    void push_back(NExtDef* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NStmtList:public Node{
+public:
+    std::vector<NStmt*> vec;
+    NStmtList(){}
+    void push_back(NStmt* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NVarList:public Node{
+public:
+    std::vector<NParamDec*> vec;
+    NVarList(){}
+    void push_back(NParamDec* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NVarDecList:public Node{
+public:
+    std::vector<NVarDec*> vec;
+    NVarDecList(){}
+    void push_back(NVarDec* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NDecList:public Node{
+public:
+    std::vector<NDec*> vec;
+    NDecList(){}
+    void push_back(NDec* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NDefList:public Node{
+public:
+    std::vector<NDef*> vec;
+    NDefList(){}
+    void push_back(NDef* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NExpList:public Node{
+public:
+    std::vector<NExp*> vec;
+    NExpList(){}
+    void push_back(NExp* ptr){
+        vec.push_back(ptr);
+    }
+};
+
+class NBlock: public Node{
+public:
+    NExtDefList* llist;
+    NBlock(NExtDefList &llist):llist(&llist){}
+};
+
 class NExtDefNormal: public NExtDef{
 public:
     const NSpecifier* spe;
-    VarDecList extlist;
-    NExtDefNormal(const NSpecifier &spe,const VarDecList& extlist):spe(&spe),extlist(extlist){}
+    NVarDecList extlist;
+    NExtDefNormal(const NSpecifier &spe,const NVarDecList& extlist):spe(&spe),extlist(extlist){}
     NExtDefNormal(const NSpecifier &spe):spe(&spe){}
 };
 
@@ -47,15 +115,15 @@ class NExtDefFunc :public NExtDef{
 public:
     const NSpecifier* spe;
     const NFuncDec* funcdef;
-    NCompSt& code;
-    NExtDefFunc(const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):spe(&spe),funcdef(&funcdef),code(code){} 
+    const NCompSt* code;
+    NExtDefFunc(const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):spe(&spe),funcdef(&funcdef),code(&code){} 
 };
 
 class NStructSpecifier: public Node{
 public:
     const NIdentifier* id;
-    DefList defList;
-    NStructSpecifier(const NIdentifier& id,const DefList& defList):id(&id),defList(defList){}
+    NDefList defList;
+    NStructSpecifier(const NIdentifier& id,const NDefList& defList):id(&id),defList(defList){}
     NStructSpecifier(const NIdentifier& id):id(&id){};
 };
 
@@ -79,14 +147,14 @@ class NExp : public NStmt {
 
 class NCompSt: public NStmt{
 public:
-    StmtList klist;
-    DefList defList;
+    NStmtList klist;
+    NDefList defList;
     NCompSt(){}
-    void add(DefList& dlist,StmtList& slist){
-        for(auto iter=dlist.begin();iter!=dlist.end();iter++){
+    void add(NDefList& dlist,NStmtList& slist){
+        for(auto iter=dlist.vec.begin();iter!=dlist.vec.end();iter++){
             defList.push_back(*iter);
         }
-        for(auto iter=slist.begin();iter!=slist.end();iter++){
+        for(auto iter=slist.vec.begin();iter!=slist.vec.end();iter++){
             klist.push_back(*iter);
         }
     }
@@ -95,8 +163,8 @@ public:
 class NDef :public NStmt{
 public:
     const NSpecifier* spe;
-    DecList list;
-    NDef(const NSpecifier& spe,const DecList& list):spe(&spe),list(list){}
+    NDecList list;
+    NDef(const NSpecifier& spe,const NDecList& list):spe(&spe),list(list){}
 };
 
 class NDec :public NStmt{
@@ -162,15 +230,25 @@ public:
 class NFuncDec : public NExp{
 public:
     const NIdentifier* id;
-    VarList list;
+    NVarList list;
     NFuncDec(const NIdentifier& id):id(&id){}
-    NFuncDec(const NIdentifier& id,VarList& list):id(&id),list(list){}
+    NFuncDec(const NIdentifier& id,NVarList& list):id(&id),list(list){}
 };
 
 class NInteger : public NExp {
 public:
     long long value;
-    NInteger(long long value) : value(value) { }
+    char* endptr;
+    NInteger(std:: string& s){
+        std::printf("Parsing %s\n",s.c_str());
+        endptr=NULL;
+        value=std::strtol(s.c_str(),&endptr,0);
+        if(endptr!=NULL){
+            std::printf("Error type A at Line %d: \'Unknown Integer %s\'\n", yylineno, s.c_str());
+            std::exit(1);
+        }
+        std::printf("Get value %lld\n",value);
+    }
 };
 
 class NDouble : public NExp {
@@ -182,8 +260,8 @@ public:
 class NMethodCall : public NExp {
 public:
     const NIdentifier* id;
-    ExpList arguments;
-    NMethodCall(const NIdentifier& id, ExpList& arguments) :
+    NExpList arguments;
+    NMethodCall(const NIdentifier& id, NExpList& arguments) :
         id(&id), arguments(arguments) { }
     NMethodCall(const NIdentifier& id) : id(&id) { }
 };

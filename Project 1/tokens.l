@@ -24,7 +24,7 @@
 
 [a-zA-Z_][a-zA-Z0-9_]*  SAVE_TOKEN; return TID;
 [0-9]+\.[0-9]* 			    SAVE_TOKEN; return TFLOAT;
-[0-9]+					        SAVE_TOKEN; return TINT;
+(0x)?[0-9a-fA-F]+					        SAVE_TOKEN; return TINT;
 
 "="						        return TOKEN(TASSIGN);
 "=="				          	return TOKEN(TEQ);
@@ -52,6 +52,6 @@
 "*"		          				return TOKEN(TMUL);
 "/"				          		return TOKEN(TDIV);
 
-.                       printf("Unknown token!\n"); yyterminate();
+.                       printf("Error type A at Line %d: Mysterious characters \'%s\'\n", yylineno, yytext); yyterminate();
 
 %%
