@@ -34,9 +34,9 @@
 ">"				          		return TOKEN(TGT);
 ">="					        return TOKEN(TGE);
 
-"!"                             return TOKEN(NOT);
-"&&"                            return TOKEN(AND);
-"||"                            return TOKEN(OR);
+"!"                             return TOKEN(TNOT);
+"&&"                            return TOKEN(TAND);
+"||"                            return TOKEN(TOR);
 
 "("	          					return TOKEN(TLP);
 ")"					          	return TOKEN(TRP);

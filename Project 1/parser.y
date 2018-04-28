@@ -19,7 +19,7 @@ extern int yylex();
     NIdentifier* Identifier;
     NDef* Def;
     NParamDec* ParamDec;
-    NCompst* Compst;
+    NCompSt* Compst;
     NExtDef* ExtDef;
     NDec* Dec;
     std::vector<NStmt*>* StmtList;
@@ -27,8 +27,9 @@ extern int yylex();
     std::vector<NExtDef*>* ExtDefList;
     std::vector<NDef*>* DefList;
     std::vector<NDec*>* DecList;
-    std::vector<NVarDec*>* VarDeclist
+    std::vector<NVarDec*>* VarDecList;
     std::vector<NParamDec*>* VarList;
+    std::string *string;
     int token;
 }
 
@@ -86,33 +87,29 @@ extern int yylex();
 
 %%
 
-Program : ExtDefList { programBlock=*$1;}
+Program : ExtDefList { programBlock=$1;}
         ;
 
 ExtDefList:/* */{$$=new ExtDefList();}
           | ExtDef ExtDefList {$2->push_back($1);}
           ;
-/*
-          | ExtDef {$$=new ExtDefList();$$->push_back(*$1);}
-          | ExtDefList ExtDef {$1->push_back(*$2);}
-          ;
-*/
+
 ExtDef    : Specifier ExtDecList TSEMI {$$=new NExtDefNormal(*$1,*$2);}
           | Specifier TSEMI {$$=new NExtDefNormal(*$1);}
-          | Specifier FuncDec CompSt {$$=new NExtDefFunc(*$1,*$2,*$3)}
+          | Specifier FuncDec CompSt {$$=new NExtDefFunc(*$1,*$2,*$3);}
           ;
 
-ExtDecList: VarDec {$$=new VarDeclist();$$->push_back($1);}
+ExtDecList: VarDec {$$=new VarDecList();$$->push_back($1);}
           | VarDec TCOMMA ExtDecList {$3->push_back($1);}
           ;
 
-Specifier : TTYPE_INT {$$=new NSepcifier($1);}
-          | TTYPE_FLOAT {$$=new NSepcifier($1);}
-          | StructSpecifier {$$=new NSepcifier(*$1);}
+Specifier : TTYPE_INT {$$=new NSpecifier($<token>1);}
+          | TTYPE_FLOAT {$$=new NSpecifier($<token>1);}
+          | StructSpecifier {$$=new NSpecifier(*$1);}
           ;
 
 StructSpecifier:TSTRUCT OptTag TLC DefList TRC { $$=new NStructSpecifier(*$2,*$4);}
-               | TSTRUCT OptTag {$$=new NStructSpecifier(*$2);}
+               | TSTRUCT TID {$$=new NStructSpecifier(*$2);}
           ;
 
 OptTag : /* blank */ {}
@@ -120,7 +117,7 @@ OptTag : /* blank */ {}
           ;
 
 VarDec : TID {$$=new NVarDec(*$1);}
-       | VarDec TLB TINT TRB {$$=new NVarDec(*$1,$3);}
+       | VarDec TLB TINT TRB {$$=new NVarDec(*$1,atol($3->c_str()));}
        ;
 
 FuncDec : TID TLP VarList TRP {$$=new NFuncDec(*$1,*$3);}
@@ -128,13 +125,13 @@ FuncDec : TID TLP VarList TRP {$$=new NFuncDec(*$1,*$3);}
        ;
 
 VarList :ParamDec TCOMMA VarList {$3->push_back($1);}
-        |ParamDec {$$=new Varlist();$$->push_back($1);}
+        |ParamDec {$$=new VarList();$$->push_back($1);}
        ;
 
-ParamDec: Specifier VarDec {$$=new ParamDec(*$1,*$2);}
+ParamDec: Specifier VarDec {$$=new NParamDec(*$1,*$2);}
         ;
 
-CompSt : TLC DefList StmtList TRC {$$=new NCompSt();$$->add(*$1,*$2);}
+CompSt : TLC DefList StmtList TRC {$$=new NCompSt();$$->add(*$2,*$3);}
        ;
 
 StmtList :/* blank */ {$$=new StmtList();}
@@ -142,7 +139,7 @@ StmtList :/* blank */ {$$=new StmtList();}
          ;
 
 Stmt  : Exp TSEMI {$$=new NExp(*$1);}
-      | CompSt {$$=new CompSt(*$1);}
+      | CompSt {$$=new NCompSt(*$1);}
       | TRETURN Exp TSEMI {$$=new NReturnStmt(*$2);}
       | TIF TLP Exp TRP Stmt {$$=new NIfStmt(*$3,*$5);}
       | TIF TLP Exp TRP Stmt TELSE Stmt {$$=new NIfStmt(*$3,*$5,*$7);}
@@ -177,9 +174,9 @@ Exp  : Exp TASSIGN Exp { $$ = new NAssignment(*$1, *$3); }
      | Exp TLE Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
      | Exp TGE Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
      | Exp TGT Exp {$$ = new NBinaryOperator(*$1, $2, *$3);}
-     | TLP Exp TRP {$$=*$2;}
-     | TMINUS Exp {$$=new NUnaryOperator(*$2,*$1);}
-     | TNOT Exp {$$=new NUnaryOperator(*$2,*$1);}
+     | TLP Exp TRP {$$=$2;}
+     | TMINUS Exp {$$=new NUnaryOperator(*$2,$1);}
+     | TNOT Exp {$$=new NUnaryOperator(*$2,$1);}
      | TID TLP Args TRP {$$ = new NMethodCall(*$1, *$3);}
      | TID TLP TRP {$$ = new NMethodCall(*$1);}
      | Exp TLB Exp TRB {$$=new NArrayIndex(*$1,*$3);}

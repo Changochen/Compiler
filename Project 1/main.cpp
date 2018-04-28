@@ -1,10 +1,13 @@
 #include <iostream>
 #include <cstdio>
 #include "node.h"
-
+#include <cstdlib>
 using namespace std;
 
 extern int yyparse();
+extern int yylex();
+extern int yyrestart(FILE* f);
+
 //extern std::vector<NExtDef*>* programBlock;
 extern int yylineno;
 
