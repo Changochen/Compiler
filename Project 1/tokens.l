@@ -27,7 +27,10 @@
 
 [a-zA-Z_][a-zA-Z0-9_]*  SAVE_TOKEN; return TID;
 [0-9]+\.[0-9]* 			    SAVE_TOKEN; return TFLOAT;
-(0x)?[0-9a-fA-F]+					        SAVE_TOKEN; return TINT;
+([0-9]+\.[0-9]*|\.[0-9]+)[eE][+-]?[0-9]+ SAVE_TOKEN; return TFLOAT;
+([0-9]+\.[0-9]*|\.[0-9]+)[eE][+-]?  SAVE_TOKEN; return TFLOAT;
+
+(0x)?[0-9a-fA-F]+		        SAVE_TOKEN; return TINT;
 
 "="						        return TOKEN(TASSIGN);
 "=="				          	return TOKEN(TEQ);

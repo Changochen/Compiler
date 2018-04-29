@@ -2,7 +2,7 @@ int main() { //this is commemt;
     int i = 1;
     /*fdfdfdf
      * fsdsfsdfdsf */
-    int j = 2;
+    int j = 1.2e10;
     int j =3;
     int j = 4;
     int j = 5;

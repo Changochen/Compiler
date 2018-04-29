@@ -281,7 +281,7 @@ void NInteger::print(int i) const{
 
 void NDouble::print(int i) const{
     print_w(i);
-    std::printf("INT : %f\n",this->value);
+    std::printf("FLOAT : %f\n",this->value);
 }
 
 void NMethodCall::print(int i) const{
