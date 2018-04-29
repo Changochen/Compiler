@@ -141,8 +141,8 @@ CompSt : TLC DefList StmtList TRC {$$=new NCompSt(yylineno);$$->lineno=$2->linen
 StmtList :/* blank */ {$$=new NStmtList(yylineno);}
          | Stmt StmtList {$$=$2;$$->lineno=$1->lineno;$2->push_front($1);}
          ;
-
-Stmt  : Exp TSEMI {$$=new NExp($1->lineno,*$1);$$=new NStmt($1->lineno,*$$,1);}
+/*$$=new NExp($1->lineno,*$1);*/
+Stmt  : Exp TSEMI {$$=new NStmt($1->lineno,*$$,1);}
       | CompSt {$$=new NCompSt($1->lineno,*$1);$$=new NStmt($1->lineno,*$$,0);}
       | TRETURN Exp TSEMI {$$=new NReturnStmt($2->lineno,*$2);$$=new NStmt($2->lineno,*$$,0);}
       | TIF TLP Exp TRP Stmt {$$=new NIfStmt($3->lineno,*$3,*$5);$$=new NStmt($3->lineno,*$$,0);}

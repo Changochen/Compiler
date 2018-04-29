@@ -13,6 +13,8 @@
 
 %%
 
+\/\*(.|\n)*\*\/                 ;
+\/\/(.)*[\t\n]                  ;
 [ \t\n]					        ;
 ";"                             return TOKEN(TSEMI);
 "int"                           return TOKEN(TTYPE_INT);

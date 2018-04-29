@@ -116,19 +116,19 @@ void NStructSpecifier::print(int i) const{
     print_w(i);
     print_linno(this->lineno,"StructSpecifier");
     print_w(i+2);
-    std::printf("STRUCT");
+    std::printf("STRUCT\n");
     if(this->defList.vec.size()!=0){
         print_w(i+2);
-        std::printf("OptTag");
+        std::printf("OptTag\n");
         this->id->print(i+4);
         print_w(i+2);
-        std::printf("LC");
+        std::printf("LC\n");
         this->defList.print(i+2);
         print_w(i+2);
-        std::printf("RC");
+        std::printf("RC\n");
     }else{
         print_w(i+2);
-        std::printf("Tag");
+        std::printf("Tag\n");
         this->id->print(i+4);
     }
 }
@@ -140,7 +140,7 @@ void NSpecifier::print(int i) const{
         this->spe->print(i+2);
     }else{
         print_w(i+2);
-        print_linno(this->lineno,"TYPE");
+        std::printf("TYPE\n");
     }
 }
 

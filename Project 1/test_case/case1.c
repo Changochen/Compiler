@@ -1,6 +1,7 @@
-int main()
-{
+int main() { //this is commemt;
     int i = 1;
+    /*fdfdfdf
+     * fsdsfsdfdsf */
     int j = 2;
     int j =3;
     int j = 4;
@@ -8,5 +9,5 @@ int main()
     if(i>4){
         i=3;
     }
-    return 0;
+return 0;
 }

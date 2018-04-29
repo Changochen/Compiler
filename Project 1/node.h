@@ -296,7 +296,7 @@ public:
         
     	this->is_arr=0;
         this->next->is_arr=1;
-        this->next->length=length;
+        this->length=length;
     }
 };
 
@@ -401,5 +401,7 @@ public:
 	virtual void print(int i) const;
     const NExp* expr;
     const NIdentifier* member;
-    NStructMem(int lineno,const NExp& expr,const NIdentifier& member):lineno(lineno),expr(&expr),member(&member){}
+    NStructMem(int lineno,const NExp& expr,const std::string member):lineno(lineno),expr(&expr){
+        this->member=new NIdentifier(lineno,member);
+    }
 };
