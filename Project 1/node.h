@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <deque>
+#include <list>
 #include <llvm/IR/Value.h>
 
 extern int yylineno;
@@ -20,201 +22,279 @@ class NStmtList;
 class NDefList;
 class NExpList;
 class NDecList;
-class NVarDecList;
+class NExtDecList;
 class NVarList;
 
 class Node {
 public:
-    virtual void print(int i){}
+    virtual void print(int i) const;
 };
 
-static Node tmp;
 
 class NExtDef : public Node{
-
+public:
+    int lineno;
+	virtual void print(int i) const;
 };
 
 class NExtDefList:public Node{
 public:
-    std::vector<NExtDef*> vec;
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NExtDef*> vec;
+    NExtDefList(int lineno):lineno(lineno){}
     NExtDefList(){}
-    void push_back(NExtDef* ptr){
-        vec.push_back(ptr);
+    void push_front(NExtDef* ptr){
+        vec.push_front(ptr);
     }
 };
 
 class NStmtList:public Node{
 public:
-    std::vector<NStmt*> vec;
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NStmt*> vec;
+    NStmtList(int lineno):lineno(lineno){}
     NStmtList(){}
-    void push_back(NStmt* ptr){
-        vec.push_back(ptr);
+    void push_front(NStmt* ptr){
+        vec.push_front(ptr);
     }
 };
 
 class NVarList:public Node{
 public:
-    std::vector<NParamDec*> vec;
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NParamDec*> vec;
+    NVarList(int lineno):lineno(lineno){}
     NVarList(){}
-    void push_back(NParamDec* ptr){
-        vec.push_back(ptr);
+    void push_front(NParamDec* ptr){
+        vec.push_front(ptr);
     }
 };
 
-class NVarDecList:public Node{
+class NExtDecList:public Node{
 public:
-    std::vector<NVarDec*> vec;
-    NVarDecList(){}
-    void push_back(NVarDec* ptr){
-        vec.push_back(ptr);
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NVarDec*> vec;
+    NExtDecList(int lineno):lineno(lineno){}
+    NExtDecList(){}
+    void push_front(NVarDec* ptr){
+        vec.push_front(ptr);
     }
 };
 
 class NDecList:public Node{
 public:
-    std::vector<NDec*> vec;
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NDec*> vec;
+    NDecList(int lineno):lineno(lineno){}
     NDecList(){}
-    void push_back(NDec* ptr){
-        vec.push_back(ptr);
+    void push_front(NDec* ptr){
+        vec.push_front(ptr);
     }
 };
 
 class NDefList:public Node{
 public:
-    std::vector<NDef*> vec;
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NDef*> vec;
+    NDefList(int lineno):lineno(lineno){}
     NDefList(){}
-    void push_back(NDef* ptr){
-        vec.push_back(ptr);
+    void push_front(NDef* ptr){
+        vec.push_front(ptr);
     }
 };
 
 class NExpList:public Node{
 public:
-    std::vector<NExp*> vec;
+    int lineno;
+	virtual void print(int i) const;
+    std::list<NExp*> vec;
+    NExpList(int lineno):lineno(lineno){}
     NExpList(){}
-    void push_back(NExp* ptr){
-        vec.push_back(ptr);
+    void push_front(NExp* ptr){
+        vec.push_front(ptr);
     }
 };
 
 class NBlock: public Node{
 public:
+    int lineno;
+	virtual void print(int i) const;
     NExtDefList* llist;
-    NBlock(NExtDefList &llist):llist(&llist){}
+    NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){}
 };
 
 class NExtDefNormal: public NExtDef{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NSpecifier* spe;
-    NVarDecList extlist;
-    NExtDefNormal(const NSpecifier &spe,const NVarDecList& extlist):spe(&spe),extlist(extlist){}
-    NExtDefNormal(const NSpecifier &spe):spe(&spe){}
+    NExtDecList extlist;
+    NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){}
+    NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){}
 };
 
 class NExtDefFunc :public NExtDef{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NSpecifier* spe;
     const NFuncDec* funcdef;
     const NCompSt* code;
-    NExtDefFunc(const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):spe(&spe),funcdef(&funcdef),code(&code){} 
+    NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){} 
+};
+
+
+
+
+class NStmt : public Node {
+public:
+    int lineno;
+	virtual void print(int i) const;
+    const NStmt* ptr;
+    int type;
+    NStmt(int lineno,const NStmt& ptr,int type):lineno(lineno),ptr(&ptr),type(type){}
+    NStmt(int lineno,const NStmt& ptr):lineno(lineno),ptr(&ptr),type(0){}
+    NStmt(int lineno):lineno(lineno),ptr(NULL){}
+    NStmt():ptr(NULL){}
+};
+
+class NExp : public NStmt {
+public:
+    int lineno;
+	virtual void print(int i) const;
+    const NExp* ptr;
+    int type;
+    NExp(int lineno,const NExp& ptr,int type):lineno(lineno),ptr(&ptr),type(type){}
+    NExp(int lineno,const NExp& ptr):lineno(lineno),ptr(&ptr),type(0){}
+    NExp(int lineno):lineno(lineno),ptr(NULL){}
+    NExp():ptr(NULL){}
+
+};
+class NIdentifier : public NExp{
+public:
+    int lineno;
+    virtual void print(int i) const;
+    std::string name;
+    NIdentifier(int lineno,const std::string& name):lineno(lineno),name(name){}
+    NIdentifier(const std::string& name):lineno(yylineno),name(name){}
 };
 
 class NStructSpecifier: public Node{
 public:
+    int lineno;
+    virtual void print(int i) const;
     const NIdentifier* id;
     NDefList defList;
-    NStructSpecifier(const NIdentifier& id,const NDefList& defList):id(&id),defList(defList){}
-    NStructSpecifier(const NIdentifier& id):id(&id){};
+    NStructSpecifier(int lineno,const NIdentifier& id,const NDefList& defList):lineno(lineno),id(&id),defList(defList){}
+    NStructSpecifier(int lineno,const NIdentifier& id):lineno(lineno),id(&id){}
+    NStructSpecifier(int lineno,const std::string & id_name):lineno(lineno){
+        this->id=new NIdentifier(lineno,id_name);
+    };
 };
 
 
 class NSpecifier: public Node{
 public:
+    int lineno;
+    virtual void print(int i) const;
     int type;
     int is_struct;
     NStructSpecifier* spe;
 
-    NSpecifier(int type):type(type),is_struct(0){}
-    NSpecifier(NStructSpecifier& spe):is_struct(1),spe(&spe){}
+    NSpecifier(int lineno,int type):lineno(lineno),type(type),is_struct(0){}
+    NSpecifier(int lineno,NStructSpecifier& spe):lineno(lineno),is_struct(1),spe(&spe){}
 };
-
-
-class NStmt : public Node {
-};
-
-class NExp : public NStmt {
-};
-
 class NCompSt: public NStmt{
 public:
+    int lineno;
+	virtual void print(int i) const;
     NStmtList klist;
     NDefList defList;
-    NCompSt(){}
+    NCompSt(int lineno):lineno(lineno){}
+    NCompSt(int lineno,const NCompSt& cmp){
+        this->lineno=lineno;
+        this->klist=cmp.klist;
+        this->defList=cmp.defList;
+    }
     void add(NDefList& dlist,NStmtList& slist){
-        for(auto iter=dlist.vec.begin();iter!=dlist.vec.end();iter++){
-            defList.push_back(*iter);
-        }
-        for(auto iter=slist.vec.begin();iter!=slist.vec.end();iter++){
-            klist.push_back(*iter);
-        }
+        klist=slist;
+        defList=dlist;
     }
 };
 
 class NDef :public NStmt{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NSpecifier* spe;
-    NDecList list;
-    NDef(const NSpecifier& spe,const NDecList& list):spe(&spe),list(list){}
+    NDecList dlist;
+    NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno),spe(&spe),dlist(dlist){}
 };
 
 class NDec :public NStmt{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NVarDec* vardec;
     const NExp*  expr;
     int is_assign;
 
-    NDec(const NVarDec& vardec):vardec(&vardec),is_assign(0){}
-    NDec(const NVarDec& vardec,const NExp&  expr):expr(&expr),is_assign(1),vardec(&vardec){}
+    NDec(int lineno,const NVarDec& vardec):lineno(lineno),vardec(&vardec),is_assign(0){}
+    NDec(int lineno,const NVarDec& vardec,const NExp&  expr):lineno(lineno),expr(&expr),is_assign(1),vardec(&vardec){}
 };
 
 class NReturnStmt: public NStmt{
 public:
-    NExp& res;
-    NReturnStmt(NExp& res):res(res){}
+    int lineno;
+	virtual void print(int i) const;
+    const NExp* res;
+    NReturnStmt(int lineno,NExp& res):lineno(lineno),res(&res){}
 };
 
 class NIfStmt : public NStmt{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NExp* condition;
     const NStmt* ifstmt;
     const NStmt* elstmt;
-    NIfStmt(NExp& condition,NStmt& ifstmt):condition(&condition),ifstmt(&ifstmt){}
-    NIfStmt(NExp& condition,NStmt& ifstmt,NStmt& elstmt):condition(&condition),ifstmt(&ifstmt),elstmt(&elstmt){}
+    NIfStmt(int lineno,NExp& condition,NStmt& ifstmt):lineno(lineno),condition(&condition),ifstmt(&ifstmt),elstmt(NULL){}
+    NIfStmt(int lineno,NExp& condition,NStmt& ifstmt,NStmt& elstmt):lineno(lineno),condition(&condition),ifstmt(&ifstmt),elstmt(&elstmt){}
 };
 
 class NWhileStmt :public NStmt{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NExp* condition;
     const NStmt* body;
-    NWhileStmt(NExp& condition,NStmt& body):condition(&condition),body(&body){}
+    NWhileStmt(int lineno,NExp& condition,NStmt& body):lineno(lineno),condition(&condition),body(&body){}
 };
 
-class NIdentifier : public NExp{
-public:
-    std::string name;
-    NIdentifier(const std::string& name) : name(name) { }
-};
+
 
 class NVarDec : public NExp{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NIdentifier* id;
     NVarDec* next;
     int is_arr;
     int length;
-    NVarDec(const std::string& id):is_arr(0){
-        this->id=new NIdentifier(id);
+    NVarDec(int lineno,const std::string& id):lineno(lineno),is_arr(0){
+        
+        this->id=new NIdentifier(lineno,id);
+        this->next=(NULL);
     }
-    NVarDec(NVarDec& next,int length):next(&next){
+    NVarDec(int lineno,NVarDec& next,int length):lineno(lineno),next(&next){
+        
+    	this->is_arr=0;
         this->next->is_arr=1;
         this->next->length=length;
     }
@@ -222,86 +302,104 @@ public:
 
 class NParamDec:public NExp{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NSpecifier* spe;
     const NVarDec* vardec;
-    NParamDec(const NSpecifier& spe,const NVarDec& vardec):spe(&spe),vardec(&vardec){}
+    NParamDec(int lineno,const NSpecifier& spe,const NVarDec& vardec):lineno(lineno),spe(&spe),vardec(&vardec){}
 };
 
 class NFuncDec : public NExp{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NIdentifier* id;
-    NVarList list;
-    NFuncDec(const NIdentifier& id):id(&id){}
-    NFuncDec(const NIdentifier& id,NVarList& list):id(&id),list(list){}
+    NVarList dlist;
+    NFuncDec(int lineno,const NIdentifier& id):lineno(lineno),id(&id) {}
+    NFuncDec(int lineno,const NIdentifier& id,NVarList& dlist):lineno(lineno),id(&id),dlist(dlist){}
 };
 
 class NInteger : public NExp {
 public:
+    int lineno;
+	virtual void print(int i) const;
     long long value;
     char* endptr;
-    NInteger(std:: string& s){
-        std::printf("Parsing %s\n",s.c_str());
+    NInteger(int lineno,std:: string& s):lineno(lineno){
         endptr=NULL;
         value=std::strtol(s.c_str(),&endptr,0);
-        if(endptr!=NULL){
+        if(*endptr!='\0'){
             std::printf("Error type A at Line %d: \'Unknown Integer %s\'\n", yylineno, s.c_str());
             std::exit(1);
         }
-        std::printf("Get value %lld\n",value);
     }
 };
 
 class NDouble : public NExp {
 public:
+    int lineno;
+	virtual void print(int i) const;
     double value;
-    NDouble(double value) : value(value) { }
+    NDouble(int lineno,double value) :lineno(lineno), value(value) { }
 };
 
 class NMethodCall : public NExp {
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NIdentifier* id;
     NExpList arguments;
-    NMethodCall(const NIdentifier& id, NExpList& arguments) :
+    NMethodCall(int lineno,const NIdentifier& id, NExpList& arguments) :lineno(lineno),
         id(&id), arguments(arguments) { }
-    NMethodCall(const NIdentifier& id) : id(&id) { }
+    NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id) { }
 };
 
 class NBinaryOperator : public NExp {
 public:
+    int lineno;
+	virtual void print(int i) const;
     int op;
     const NExp* lhs;
     const NExp* rhs;
-    NBinaryOperator(NExp& lhs, int op, NExp& rhs) :
+    NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :lineno(lineno),
         op(op),lhs(&lhs), rhs(&rhs){ }
 };
 
 class NUnaryOperator : public NExp {
 public:
+    int lineno;
+	virtual void print(int i) const;
     int op;
     const NExp* rhs;
-    NUnaryOperator(NExp& rhs, int op) :
+    NUnaryOperator(int lineno,NExp& rhs, int op) :lineno(lineno),
         op(op),rhs(&rhs){ }
 };
 
 class NArrayIndex :public NExp{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NExp* index;
     const NExp* arr;
-    NArrayIndex(NExp& arr,NExp& index):
+    NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),
         index(&index),arr(&arr){}
 };
 
 class NAssignment : public NExp {
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NExp* lhs;
     const NExp* rhs;
-    NAssignment(NExp& lhs, NExp& rhs) : 
+    NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),
         lhs(&lhs), rhs(&rhs) { }
 };
 
-class NStrutMem :public NExp{
+class NStructMem :public NExp{
 public:
+    int lineno;
+	virtual void print(int i) const;
     const NExp* expr;
     const NIdentifier* member;
-    NStrutMem(NExp& expr,NIdentifier& member):expr(&expr),member(&member){}
+    NStructMem(int lineno,const NExp& expr,const NIdentifier& member):lineno(lineno),expr(&expr),member(&member){}
 };

@@ -13,6 +13,7 @@ extern int yylineno;
 
 int main(int argc, char** argv)
 {
+//    printf("%d\n",yytokentype::TNOT);
     if (argc < 2) {
         yylex();
         return 0;
@@ -29,6 +30,7 @@ int main(int argc, char** argv)
         //yydebug = 1;
         yyparse();
         fclose(f);
+        programBlock->print(0);
     }
     return 0;
 }
