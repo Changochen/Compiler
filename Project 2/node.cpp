@@ -3,6 +3,21 @@
 #include "node.h"
 #include "parser.hpp"
 //#include "token.hpp"
+using namespace llvm;
+static std::unique_ptr<Module> TheModule;
+static LLVMContext* TheContext;
+static IRBuilder<> *Builder;
+
+void module_init(){
+    TheContext=new LLVMContext();
+    Builder=new IRBuilder<>(*TheContext);
+    TheModule = llvm::make_unique<Module>("test the llvm",*TheContext);
+    std::cout<<"init"<<std::endl;
+}
+
+NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
+    
+}
 
 void Node::print(int i) const{
     return;
@@ -37,6 +52,35 @@ void NExtDefList::print(int i) const{
     print_linno(this->lineno,"ExtDefList");
     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
         (*iter)->print(i+2);
+    }
+}
+
+NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
+    if(spe.is_struct==false){
+        std::cout<<"What the fuck?"<<std::endl;
+        return;
+    }
+    GlobalVariable* ptr=TheModule->getGlobalVariable((spe.spe)->id->name);
+    if(ptr==NULL){
+        std::cout<<"Adding new variable "<<(spe.spe)->id->name<<std::endl;
+        TheModule->getOrInsertGlobal((spe.spe)->id->name,Builder->getInt8Ty());
+    }else{
+        std::cout<<"Redefinition of variable"<<(spe.spe)->id->name<<std::endl;
+    }
+    return;
+}
+
+NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){
+    auto type=(spe.type==TTYPE_INT)?Builder->getInt32Ty():Builder->getFloatTy();
+    GlobalVariable* ptr;
+    for(auto &var : extlist.vec){
+        ptr=TheModule->getGlobalVariable(var->id->name);
+        if(ptr==NULL){
+            std::cout<<"Adding new variable "<<var->id->name<<std::endl;
+            TheModule->getOrInsertGlobal(var->id->name,type);
+        }else{
+            std::cout<<"Redefinition of variable"<<var->id->name<<std::endl;
+        }
     }
 }
 
@@ -362,3 +406,4 @@ void NStructMem::print(int i)const{
     std::printf("DOT\n");
     this->member->print(i);
 }
+

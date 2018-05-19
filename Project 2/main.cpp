@@ -7,6 +7,7 @@ using namespace std;
 extern int yyparse();
 extern int yylex();
 extern int yyrestart(FILE* f);
+//extern std::unique_ptr<llvm::Module> TheModule;
 extern NBlock* programBlock;
 //extern std::vector<NExtDef*>* programBlock;
 extern int yylineno;
@@ -28,6 +29,7 @@ int main(int argc, char** argv)
         yyrestart(f);
         yylineno = 1;
         //yydebug = 1;
+        module_init();
         yyparse();
         fclose(f);
         programBlock->print(0);

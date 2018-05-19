@@ -4,6 +4,13 @@
 #include <deque>
 #include <list>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Module.h>
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Verifier.h"
+
 
 extern int yylineno;
 class NStmt;
@@ -24,6 +31,8 @@ class NExpList;
 class NDecList;
 class NExtDecList;
 class NVarList;
+
+void module_init();
 
 class Node {
 public:
@@ -126,7 +135,7 @@ public:
     int lineno;
 	virtual void print(int i) const;
     NExtDefList* llist;
-    NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){}
+    NBlock(int lineno,NExtDefList &llist);
 };
 
 class NExtDefNormal: public NExtDef{
@@ -135,8 +144,8 @@ public:
 	virtual void print(int i) const;
     const NSpecifier* spe;
     NExtDecList extlist;
-    NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){}
-    NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){}
+    NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist);
+    NExtDefNormal(int lineno,const NSpecifier &spe);
 };
 
 class NExtDefFunc :public NExtDef{
@@ -204,12 +213,13 @@ public:
     int lineno;
     virtual void print(int i) const;
     int type;
-    int is_struct;
+    bool is_struct;
     NStructSpecifier* spe;
 
-    NSpecifier(int lineno,int type):lineno(lineno),type(type),is_struct(0){}
-    NSpecifier(int lineno,NStructSpecifier& spe):lineno(lineno),is_struct(1),spe(&spe){}
+    NSpecifier(int lineno,int type):lineno(lineno),type(type),is_struct(false){}
+    NSpecifier(int lineno,NStructSpecifier& spe):lineno(lineno),is_struct(true),spe(&spe){}
 };
+
 class NCompSt: public NStmt{
 public:
     int lineno;

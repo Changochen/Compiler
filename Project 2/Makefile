@@ -6,7 +6,7 @@ OBJS = parser.o  \
 	   node.o
 
 LLVMCONFIG = llvm-config
-CPPFLAGS = `$(LLVMCONFIG) --cppflags` -std=c++11
+CPPFLAGS = `$(LLVMCONFIG) --cppflags` -std=c++11 -g
 LDFLAGS = `$(LLVMCONFIG) --ldflags` -lpthread -ldl -lz -lncurses -rdynamic
 LIBS = `$(LLVMCONFIG) --libs`
 
