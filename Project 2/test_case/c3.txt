@@ -6,7 +6,7 @@ struct dd{
     int test=1;
     int test;
 };
-int main(){
+int main(int kk){
     struct d a;
     int u;
     i[0]=1;

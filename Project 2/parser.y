@@ -124,7 +124,7 @@ VarDec : TID {$$=new NVarDec(yylineno,*$1);}
        | VarDec TLB TINT TRB {$$=new NVarDec($1->lineno,*$1,atol($3->c_str()));}
        ;
 
-FuncDec : TID TLP VarList TRP {$$=new NFuncDec($3->lineno,*$1,*$3);}
+FuncDec : TID TLP VarList TRP {$$=new NFuncDec($3->lineno,*(new NIdentifier(yylineno,*$1)),*$3);}
         | TID TLP TRP {$$=new NFuncDec(yylineno,*(new NIdentifier(yylineno,*$1)));}
        ;
 
@@ -181,8 +181,8 @@ Exp  : Exp TASSIGN Exp { $$ = new NAssignment($1->lineno,*$1, *$3); $$=new NExp(
      | TLP Exp TRP {$$=new NExp($2->lineno,*$2,EUSELESS|$2->type);}
      | TMINUS Exp {$$=new NUnaryOperator($2->lineno,*$2,$1);$$=new NExp($2->lineno,*$$,0);}
      | TNOT Exp {$$=new NUnaryOperator($2->lineno,*$2,$1);$$=new NExp($2->lineno,*$$,0);}
-     | TID TLP Args TRP {$$ = new NMethodCall($3->lineno,*$1, *$3);$$=new NExp($3->lineno,*$$,0);}
-     | TID TLP TRP {$$ = new NMethodCall(yylineno,*$1);$$=new NExp(yylineno,*$$,0);}
+     | TID TLP Args TRP {$$ = new NMethodCall($3->lineno,*(new NIdentifier(yylineno,*$1)), *$3);$$=new NExp($3->lineno,*$$,0);}
+     | TID TLP TRP {$$ = new NMethodCall(yylineno,*(new NIdentifier(yylineno,*$1)));$$=new NExp(yylineno,*$$,0);}
      | Exp TLB Exp TRB {$$=new NArrayIndex($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL|($1->type&(EFLOAT|EINT))) ;}
      | Exp TDOT TID {$$=new NStructMem($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL);}
      | TID {$$=new NIdentifier(yylineno,*$1);$$=new NExp(yylineno,*$$,ERVAL|EID);}

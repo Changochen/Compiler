@@ -347,7 +347,7 @@ public:
     const NIdentifier* id;
     NVarList dlist;
     NFuncDec(int lineno,const NIdentifier& id):lineno(lineno),id(&id) {}
-    NFuncDec(int lineno,const NIdentifier& id,NVarList& dlist):lineno(lineno),id(&id),dlist(dlist){}
+    NFuncDec(int lineno,const NIdentifier& id, NVarList& dlist):lineno(lineno),id(&id),dlist(dlist){}
 };
 
 class NInteger : public NExp {
@@ -380,9 +380,12 @@ public:
 	virtual void print(int i) const;
     const NIdentifier* id;
     NExpList arguments;
+    void check();
     NMethodCall(int lineno,const NIdentifier& id, NExpList& arguments) :lineno(lineno),
-        id(&id), arguments(arguments) { }
-    NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id) { }
+        id(&id), arguments(arguments) {
+        check();
+    }
+    NMethodCall(int lineno,const NIdentifier& id);
 };
 
 class NBinaryOperator : public NExp {

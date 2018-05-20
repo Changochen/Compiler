@@ -194,6 +194,44 @@ NCompSt::NCompSt(int lineno):lineno(lineno){
 
 }
 
+void NMethodCall::check(){
+    auto ttype=TheModule->getFunction(id->name);
+    bool flag=true;
+    //puts("Hello?");
+    if(ttype==NULL){
+        if(lookforname(id->name)){
+            err_info(11,this->lineno,"Calling a non-callable variable",id->name.c_str());
+            return;
+        }
+        err_info(2,this->lineno,"Use of undefined function",id->name.c_str());
+        return;
+    }
+    int i=0;
+    auto tttype=ttype->getFunctionType();
+    if(arguments.vec.size()==tttype->getNumParams()){
+        //std::cout<<arguments.vec.size()<<std::endl;
+        auto args=tttype->params();
+        for(auto iter=arguments.vec.begin();iter!=arguments.vec.end();iter++,i++){
+            if((((*iter)->type&EINT)&&args[i]->isIntegerTy())||(((*iter)->type&EFLOAT)&&args[i]->isFloatTy())){
+                //std::cout<<"Pass"<<std::endl;
+            }else{
+                flag=false;
+                //std::cout<<"Not Pass"<<std::endl;
+                break;
+            }
+        }
+    }else{
+        flag=false;
+    }
+    if(flag==false){
+        err_info(9,this->lineno,"Not matching function arguments",id->name.c_str());
+    }
+}
+NMethodCall::NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id){
+    arguments.vec.clear();
+    check();
+}
+
 void NCompSt::add(NDefList& dlist,NStmtList& slist){
     klist=slist;
     defList=dlist;
@@ -239,6 +277,7 @@ void NCompSt::add(NDefList& dlist,NStmtList& slist){
         }
     }
 }
+
 void NVarList::push_front(NParamDec* ptr){
     auto name1=ptr->vardec->id->name;
     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
@@ -295,11 +334,8 @@ void NVarList::print(int i) const{
     print_linno(this->lineno,"VarList");
     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
         (*iter)->print(i+2);
-        if((++iter)!=this->vec.end()){
-            print_w(i+2);
-            std::printf("COMMA\n");
-            --iter;
-        }
+        print_w(i+2);
+        std::printf("COMMA\n");
     }
 }
 

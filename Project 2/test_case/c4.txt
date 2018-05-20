@@ -1,0 +1,9 @@
+int i,j;
+float k;
+int f(int i,int j){
+    return i+j;
+}
+
+int main(){
+    f(1.2,2);
+}
