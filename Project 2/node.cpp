@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <map>
 #include "node.h"
 #include "parser.hpp"
 //#include "token.hpp"
@@ -8,6 +9,7 @@ static std::unique_ptr<Module> TheModule,CurModule;
 static LLVMContext* TheContext , *CurContext;
 static IRBuilder<> *Builder;
 static ContextStack contextstack;
+static std::map<std::string,std::vector<std::string> > stable;
 
 void ContextStack::pop(){
     delete CurContext;
@@ -44,11 +46,11 @@ void module_init(){
     CurContext=NULL;
     Builder=new IRBuilder<>(*TheContext);
     TheModule = llvm::make_unique<Module>("Global Context",*TheContext);
-//    std::cout<<"init"<<std::endl;
+    //    std::cout<<"init"<<std::endl;
 }
 
 NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
-    
+
 }
 
 static void err_info(int type,int lineno,const char* msg,const char* more){
@@ -92,18 +94,68 @@ void NExtDefList::print(int i) const{
     }
 }
 
-NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
-    if(spe.is_struct==false){
-        std::cout<<"Parsing Struct Error?"<<std::endl;
-        exit(-1);
-        return;
+Type* createStructType(std::string name,std::map<std::string,Type*>& ivec){
+    std::vector<Type*> members;
+    stable[name];
+    for(auto &k:ivec){
+        stable[name].push_back(k.first);
+        members.push_back(k.second);
     }
+    auto s=StructType::create(*TheContext);
+    s->setName(name);
+    s->setBody(members);
+    return s;
+}
+
+Type* gettype(const NSpecifier &spe){
+    if(!spe.is_struct){
+        return spe.type==TTYPE_INT?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+    }
+    return NULL;
+}
+
+NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
     auto ptr=lookforname((spe.spe)->id->name);
-    if(ptr==NULL){
-        //vector<Type*> members;
-        TheModule->getOrInsertGlobal((spe.spe)->id->name,Builder->getInt8Ty());
+    std::map<std::string,Type*> ivec;
+    if(ptr==NULL){       
+        auto structptr=spe.spe;
+        for(auto &p1:structptr->defList.vec){
+            auto tmptype=gettype(*(p1->spe));
+            if(tmptype==NULL){  //if structure
+
+            }else{
+                for(auto &p2:p1->dlist.vec){  //if normal var or array;
+                    if(p2->is_assign){
+                        err_info(15,p2->lineno,"Initialization in definition","");
+                    }else{
+                        auto p3=p2->vardec;
+                        if(p3->next==NULL){
+                            if(ivec.find(p3->id->name)==ivec.end()){
+                                ivec[p3->id->name]=tmptype;
+                            }
+                            else{
+                                err_info(15,p2->lineno,"Collision of member definition","");
+                            }
+                        }else{
+                            int total=1;
+                            auto arrptr=p3->next;
+                            while(arrptr->next!=NULL){
+                                total*=arrptr->length;
+                                arrptr=arrptr->next;
+                            }
+                            if(ivec.find(arrptr->id->name)==ivec.end()){
+                                ivec[arrptr->id->name]=ArrayType::get(tmptype,total);
+                            }
+                            else{
+                                err_info(15,p2->lineno,"Collision of member definition","");
+                            }  
+                        }
+                    }
+                }
+            }
+        }
+        TheModule->getOrInsertGlobal((spe.spe)->id->name,createStructType((spe.spe)->id->name,ivec));
     }else{
-        //std::cout<<"Redefinition of variable"<<(spe.spe)->id->name<<std::endl;
         err_info(3,lineno,"Redefined of structure",(spe.spe)->id->name.c_str());
     }
     return;
@@ -133,20 +185,68 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList&
                 TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type,total));
             }
         }else{
-            //std::cout<<"Redefinition of variable"<<var->id->name<<std::endl;
             err_info(3,lineno,"Redefined of variable",tmpname.c_str());
         }
     }
 }
 
+NCompSt::NCompSt(int lineno):lineno(lineno){
+
+}
+
+void NCompSt::add(NDefList& dlist,NStmtList& slist){
+    klist=slist;
+    defList=dlist;
+    for(auto &ptr:defList.vec){
+        auto type=gettype(*(ptr->spe));
+        if(type==NULL){
+            if(!ptr->spe->spe->is_def){
+                err_info(20,ptr->spe->spe->lineno,"No struct definition in function","");
+            }else{
+                auto checkptr=lookforname(ptr->spe->spe->id->name);
+                if(checkptr==NULL){
+                    err_info(1,ptr->spe->spe->lineno,"Use of undefined structure",ptr->spe->spe->id->name.c_str());
+                }else if(!checkptr->isStructTy()){
+                    err_info(1,ptr->spe->spe->lineno,"This is a structure",ptr->spe->spe->id->name.c_str());
+                }
+            }
+            continue;
+        }
+        for(auto &tvar:ptr->dlist.vec){
+            auto var=tvar->vardec;
+            std::string tmpname;
+            int total=1;
+            if(var->next==NULL){
+                tmpname=var->id->name;
+            }else{
+                auto arrptr=var->next;
+                while(arrptr->next!=NULL){
+                    total*=arrptr->length;
+                    arrptr=arrptr->next;
+                }
+                tmpname=arrptr->id->name;
+            }
+            auto pptr=TheModule->getGlobalVariable(tmpname);
+            if(pptr==NULL){
+                if(var->next==NULL)
+                    TheModule->getOrInsertGlobal(tmpname,type);
+                else{
+                    TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type,total));
+                }
+            }else{
+                err_info(3,lineno,"Redefined of variable",tmpname.c_str());
+            }
+        }
+    }
+}
 void NVarList::push_front(NParamDec* ptr){
-     auto name1=ptr->vardec->id->name;
-     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+    auto name1=ptr->vardec->id->name;
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
         if(name1==(*iter)->vardec->id->name){
             err_info(18,this->lineno,"Function args have collision name",name1.c_str());
         }
-     }
-     this->vec.push_front(ptr);
+    }
+    this->vec.push_front(ptr);
 }
 
 NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){

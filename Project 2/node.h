@@ -221,12 +221,13 @@ public:
 class NStructSpecifier: public Node{
 public:
     int lineno;
+    int is_def;
     virtual void print(int i) const;
     const NIdentifier* id;
     NDefList defList;
-    NStructSpecifier(int lineno,const NIdentifier& id,const NDefList& defList):lineno(lineno),id(&id),defList(defList){}
-    NStructSpecifier(int lineno,const NIdentifier& id):lineno(lineno),id(&id){}
-    NStructSpecifier(int lineno,const std::string & id_name):lineno(lineno){
+    NStructSpecifier(int lineno,const NIdentifier& id,const NDefList& defList):lineno(lineno),id(&id),defList(defList),is_def(1){}
+    NStructSpecifier(int lineno,const NIdentifier& id):lineno(lineno),id(&id),is_def(0){}
+    NStructSpecifier(int lineno,const std::string & id_name):lineno(lineno),is_def(0){
         this->id=new NIdentifier(lineno,id_name);
     };
 };
@@ -250,16 +251,13 @@ public:
 	virtual void print(int i) const;
     NStmtList klist;
     NDefList defList;
-    NCompSt(int lineno):lineno(lineno){}
+    NCompSt(int lineno);
     NCompSt(int lineno,const NCompSt& cmp){
         this->lineno=lineno;
         this->klist=cmp.klist;
         this->defList=cmp.defList;
     }
-    void add(NDefList& dlist,NStmtList& slist){
-        klist=slist;
-        defList=dlist;
-    }
+    void add(NDefList& dlist,NStmtList& slist);
 };
 
 class NDef :public NStmt{
@@ -321,13 +319,11 @@ public:
     NVarDec* next;
     int is_arr;
     int length;
-    NVarDec(int lineno,const std::string& id):lineno(lineno),is_arr(0){
-        
+    NVarDec(int lineno,const std::string& id):lineno(lineno),is_arr(0){       
         this->id=new NIdentifier(lineno,id);
         this->next=(NULL);
     }
-    NVarDec(int lineno,NVarDec& next,int length):lineno(lineno),next(&next){
-        
+    NVarDec(int lineno,NVarDec& next,int length):lineno(lineno),next(&next){        
     	this->is_arr=0;
         this->id=NULL;
         this->next->is_arr=1;

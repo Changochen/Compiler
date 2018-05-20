@@ -2,7 +2,13 @@ int i[2];
 int u;
 int a[12];
 int a[12];
+struct dd{
+    int test=1;
+    int test;
+};
 int main(){
+    struct d a;
+    int u;
     i[0]=1;
     u=2;
 }
