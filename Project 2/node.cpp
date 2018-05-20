@@ -160,11 +160,9 @@ NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcde
                 err_info(19,lineno,"Not supported struct args yet","");
             }
             auto tmptype=(tmp->spe->type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
-            //tmptype->setName(tmp->spe->vardec->id->name);
             args.push_back(tmptype);
         }
         FunctionType *FT =FunctionType::get(rettype, args, false);
-        //Function *F =Function::Create(FT, Function::ExternalLinkage, funcdef.id->name);
         TheModule->getOrInsertFunction(funcdef.id->name,FT);
     }
 }
@@ -233,10 +231,13 @@ NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
         if(ttype==NULL){
             err_info(1,this->lineno,"Use of undefine variable",ptr->name.c_str());
         }else{
-            if(!ttype->isFloatTy()){
+            if(ttype->isIntegerTy()){
                 tmptype=EINT;
-            }else{
+            }else if(ttype->isFloatTy()){
                 tmptype=EFLOAT;
+            }else if(ttype->isArrayTy()){
+                tmptype=EARRAY;
+                this->type^=EID;
             }
         }
     }
@@ -531,8 +532,7 @@ void NStructMem::print(int i)const{
 
 NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(&index),arr(&arr){
     if(arr.type&EID){
-        /*check*/
-        this->type|=EARRAY;
+        err_info(10,this->lineno,"Indexing a non-array variable","");
     }else if(arr.type&EARRAY){
         this->type|=EARRAY;
     }
