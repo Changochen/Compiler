@@ -294,6 +294,17 @@ NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcde
         err_info(4,lineno,"Redefined of function",funcdef.id->name.c_str());
     }else{
         auto rettype=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+        for(auto &retcheck:code.klist.vec){
+            if(retcheck->type==2){
+                //puts("Get fuck!");
+                auto tptr=dynamic_cast<const NReturnStmt*>(retcheck->ptr);
+                if((tptr->res->type==EINT)&&rettype->isIntegerTy()||(tptr->res->type==EFLOAT)&&rettype->isFloatTy()){
+
+                }else{
+                    err_info(8,this->lineno,"type of return value mismatched","");
+                }
+            }
+        }
         for(auto &tmp: funcdef.dlist.vec){
             if(tmp->spe->is_struct){
                 err_info(19,lineno,"Not supported struct args yet","");
@@ -451,7 +462,7 @@ void NStmt::print(int i) const{
     print_w(i);
     print_linno(this->lineno,"Stmt");
     this->ptr->print(i+2);
-    if(this->type!=0){
+    if(this->type!=1){
         print_w(i+2);
         std::printf("SEMI\n");
     }
