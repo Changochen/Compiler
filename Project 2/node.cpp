@@ -4,19 +4,56 @@
 #include "parser.hpp"
 //#include "token.hpp"
 using namespace llvm;
-static std::unique_ptr<Module> TheModule;
-static LLVMContext* TheContext;
+static std::unique_ptr<Module> TheModule,CurModule;
+static LLVMContext* TheContext , *CurContext;
 static IRBuilder<> *Builder;
+static ContextStack contextstack;
+
+void ContextStack::pop(){
+    delete CurContext;
+    CurContext=NULL;
+    if(!contextstack.empty()){
+        CurContext=contextstack.rbegin()->curContext;
+        CurModule=std::move(contextstack.rbegin()->curModule);
+        contextstack.pop_back();
+    }else{
+        CurModule=NULL;
+    }
+}
+
+Type* lookforname(std::string name){
+    if(CurContext!=NULL){
+        auto k=CurModule->getGlobalVariable(name);
+        if(k!=NULL){
+            return k->getValueType();
+        }
+    }
+    auto k=TheModule->getGlobalVariable(name);
+    if(k==NULL)return NULL;
+    else return k->getValueType();
+}
+
+void ContextStack::push(){
+    contextstack.push_back(ContextBlock(std::move(CurModule),CurContext));
+    CurContext=new LLVMContext();
+    CurModule=llvm::make_unique<Module>("Enter function",*CurContext);
+}
 
 void module_init(){
     TheContext=new LLVMContext();
+    CurContext=NULL;
     Builder=new IRBuilder<>(*TheContext);
-    TheModule = llvm::make_unique<Module>("test the llvm",*TheContext);
-    std::cout<<"init"<<std::endl;
+    TheModule = llvm::make_unique<Module>("Global Context",*TheContext);
+//    std::cout<<"init"<<std::endl;
 }
 
 NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
     
+}
+
+static void err_info(int type,int lineno,const char* msg,const char* more){
+    printf("Error type %3d at Line %4d: %s ",type,lineno,msg);
+    puts(more);
 }
 
 void Node::print(int i) const{
@@ -57,33 +94,65 @@ void NExtDefList::print(int i) const{
 
 NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
     if(spe.is_struct==false){
-        std::cout<<"What the fuck?"<<std::endl;
+        std::cout<<"Parsing Struct Error?"<<std::endl;
+        exit(-1);
         return;
     }
     GlobalVariable* ptr=TheModule->getGlobalVariable((spe.spe)->id->name);
     if(ptr==NULL){
-        std::cout<<"Adding new variable "<<(spe.spe)->id->name<<std::endl;
+        //std::cout<<"Adding new variable "<<(spe.spe)->id->name<<std::endl;
         TheModule->getOrInsertGlobal((spe.spe)->id->name,Builder->getInt8Ty());
     }else{
-        std::cout<<"Redefinition of variable"<<(spe.spe)->id->name<<std::endl;
+        //std::cout<<"Redefinition of variable"<<(spe.spe)->id->name<<std::endl;
+        err_info(3,lineno,"Redefined of structure",(spe.spe)->id->name.c_str());
     }
     return;
 }
 
 NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){
-    auto type=(spe.type==TTYPE_INT)?Builder->getInt32Ty():Builder->getFloatTy();
+    auto type=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
     GlobalVariable* ptr;
     for(auto &var : extlist.vec){
         ptr=TheModule->getGlobalVariable(var->id->name);
         if(ptr==NULL){
-            std::cout<<"Adding new variable "<<var->id->name<<std::endl;
+            //std::cout<<"Adding new variable "<<var->id->name<<std::endl;
             TheModule->getOrInsertGlobal(var->id->name,type);
         }else{
-            std::cout<<"Redefinition of variable"<<var->id->name<<std::endl;
+            //std::cout<<"Redefinition of variable"<<var->id->name<<std::endl;
+            err_info(3,lineno,"Redefined of global variable",var->id->name.c_str());
         }
     }
 }
 
+void NVarList::push_front(NParamDec* ptr){
+     auto name1=ptr->vardec->id->name;
+     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        if(name1==(*iter)->vardec->id->name){
+            err_info(18,this->lineno,"Function args have collision name",name1.c_str());
+        }
+     }
+     this->vec.push_front(ptr);
+}
+
+NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){
+    std::vector<Type*> args;
+    if(TheModule->getFunction(funcdef.id->name)!=NULL){
+        err_info(4,lineno,"Redefined of function",funcdef.id->name.c_str());
+    }else{
+        auto rettype=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+        for(auto &tmp: funcdef.dlist.vec){
+            if(tmp->spe->is_struct){
+                err_info(19,lineno,"Not supported struct args yet","");
+            }
+            auto tmptype=(tmp->spe->type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+            //tmptype->setName(tmp->spe->vardec->id->name);
+            args.push_back(tmptype);
+        }
+        FunctionType *FT =FunctionType::get(rettype, args, false);
+        //Function *F =Function::Create(FT, Function::ExternalLinkage, funcdef.id->name);
+        TheModule->getOrInsertFunction(funcdef.id->name,FT);
+    }
+}
 void NExtDecList::print(int i) const{
     print_w(i);
     print_linno(this->lineno,"ExtDecList");
@@ -140,6 +209,42 @@ void NExpList::print(int i) const{
             iter--;
         }
     }
+}
+NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
+    int tmptype=-1;
+    if(type&EID){
+        NIdentifier* ptr=dynamic_cast<NIdentifier*>(&pp);
+        auto ttype=lookforname(ptr->name);
+        if(ttype==NULL){
+            err_info(1,this->lineno,"Use of undefine variable",ptr->name.c_str());
+        }else{
+            if(!ttype->isFloatTy()){
+                tmptype=EINT;
+            }else{
+                tmptype=EFLOAT;
+            }
+        }
+    }
+    if(tmptype!=-1){
+        this->type|=tmptype;
+    }
+}
+NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&lhs), rhs(&rhs){
+    if(!(lhs.type|ERVAL)){
+        err_info(6,this->lineno,"Rval appears on the right","");
+    }
+    int tmptype=-1;
+    if(lhs.type&EID){
+        tmptype=(this->type&EINT)?EINT:EFLOAT;
+    }else if(lhs.type&ESTRUCT){
+        tmptype=(this->type&EINT)?EINT:EFLOAT;
+    }else if(lhs.type&EARRAY){
+        tmptype=(this->type&EINT)?EINT:EFLOAT;
+    }
+    if((tmptype!=-1)&&(!(tmptype&rhs.type))){
+        err_info(5,this->lineno,"Assignment type mismatched","");
+    }
+    this->type=tmptype;
 }
 
 void NBlock::print(int i) const{
@@ -201,12 +306,12 @@ void NStmt::print(int i) const{
 void NExp::print(int i) const{
     print_w(i);
     print_linno(this->lineno,"Exp");
-    if(this->type!=0){
+    if(this->type&EUSELESS){
         print_w(i+2);
         std::printf("LP\n");
     }
     this->ptr->print(i+2);
-    if(this->type!=0){
+    if(this->type&EUSELESS){
         print_w(i+2);
         std::printf("RP\n");
     }
@@ -407,3 +512,31 @@ void NStructMem::print(int i)const{
     this->member->print(i);
 }
 
+NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(&index),arr(&arr){
+    if(arr.type&EID){
+        /*check*/
+        this->type|=EARRAY;
+    }else if(arr.type&EARRAY){
+        this->type|=EARRAY;
+    }
+    this->type|=arr.type&(EINT|EFLOAT);
+    if((index.type&EINT)==0){
+        err_info(12,this->lineno,"Non-integer array index","");
+    }
+}
+
+NUnaryOperator::NUnaryOperator(int lineno,NExp& rhs, int op) :lineno(lineno),
+        op(op),rhs(&rhs){ 
+    if(rhs.type&(EINT|EFLOAT)!=0){
+        err_info(7,this->lineno,"Operand and operator's type mismatch","");
+    }
+    this->type=rhs.type&(EINT|EFLOAT);
+}
+
+NBinaryOperator::NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :lineno(lineno),
+        op(op),lhs(&lhs), rhs(&rhs){
+    if((rhs.type&(EINT|EFLOAT))!=(lhs.type&(EINT|EFLOAT))){
+        err_info(7,this->lineno,"Operands' type mismatch","");
+    }
+    this->type=rhs.type&(EINT|EFLOAT);
+}

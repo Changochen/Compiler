@@ -1,0 +1,10 @@
+int id;
+float id2;
+
+int main(){
+
+    id=id2;
+    id[1.2]=12;
+    id[12][23]=1;
+    id<id2;
+}

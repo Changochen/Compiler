@@ -32,7 +32,7 @@ int main(int argc, char** argv)
         module_init();
         yyparse();
         fclose(f);
-        programBlock->print(0);
+//        programBlock->print(0);
     }
     return 0;
 }

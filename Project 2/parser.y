@@ -178,16 +178,16 @@ Exp  : Exp TASSIGN Exp { $$ = new NAssignment($1->lineno,*$1, *$3); $$=new NExp(
      | Exp TLE Exp {$$ = new NBinaryOperator($1->lineno,*$1, $2, *$3);$$=new NExp($1->lineno,*$$,0);}
      | Exp TGE Exp {$$ = new NBinaryOperator($1->lineno,*$1, $2, *$3);$$=new NExp($1->lineno,*$$,0);}
      | Exp TGT Exp {$$ = new NBinaryOperator($1->lineno,*$1, $2, *$3);$$=new NExp($1->lineno,*$$,0);}
-     | TLP Exp TRP {$$=new NExp($2->lineno,*$2,1);}
+     | TLP Exp TRP {$$=new NExp($2->lineno,*$2,EUSELESS|$2->type);}
      | TMINUS Exp {$$=new NUnaryOperator($2->lineno,*$2,$1);$$=new NExp($2->lineno,*$$,0);}
      | TNOT Exp {$$=new NUnaryOperator($2->lineno,*$2,$1);$$=new NExp($2->lineno,*$$,0);}
      | TID TLP Args TRP {$$ = new NMethodCall($3->lineno,*$1, *$3);$$=new NExp($3->lineno,*$$,0);}
      | TID TLP TRP {$$ = new NMethodCall(yylineno,*$1);$$=new NExp(yylineno,*$$,0);}
-     | Exp TLB Exp TRB {$$=new NArrayIndex($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,0);}
-     | Exp TDOT TID {$$=new NStructMem($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,0);}
-     | TID {$$=new NIdentifier(yylineno,*$1);$$=new NExp(yylineno,*$$,0);}
-     | TINT {$$ = new NInteger(yylineno,*$1);$$=new NExp(yylineno,*$$,0);}
-     | TFLOAT {$$ = new NDouble(yylineno,atof($1->c_str()));$$=new NExp(yylineno,*$$,0);}
+     | Exp TLB Exp TRB {$$=new NArrayIndex($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL|($1->type&(EFLOAT|EINT))) ;}
+     | Exp TDOT TID {$$=new NStructMem($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL);}
+     | TID {$$=new NIdentifier(yylineno,*$1);$$=new NExp(yylineno,*$$,ERVAL|EID);}
+     | TINT {$$ = new NInteger(yylineno,*$1);$$=new NExp(yylineno,*$$,EINT);}
+     | TFLOAT {$$ = new NDouble(yylineno,atof($1->c_str()));$$=new NExp(yylineno,*$$,EFLOAT);}
      ;
 
 Args : Exp {$$=new NExpList($1->lineno);$$->push_front($1);}

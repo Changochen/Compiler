@@ -11,7 +11,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
 
-
+using namespace llvm;
 extern int yylineno;
 class NStmt;
 class NExp;
@@ -33,6 +33,33 @@ class NExtDecList;
 class NVarList;
 
 void module_init();
+
+enum ExpType{
+    EID=0x20,
+    EARRAY=0x40,
+    ERVAL=0x80,
+    EINT=0x100,
+    EFLOAT=0x200,
+    ESTRUCT=0x400,
+    EUSELESS=0x800
+};
+
+class ContextBlock{
+public:
+    std::unique_ptr<Module> curModule;
+    LLVMContext*  curContext;
+    ContextBlock(std::unique_ptr<Module> curModule, LLVMContext*  curContext):curContext(curContext)
+    {
+        this->curModule=std::move(curModule);
+    }
+};
+
+class ContextStack{
+public:
+    std::vector<ContextBlock> contextstack;
+    void pop();
+    void push();
+};
 
 class Node {
 public:
@@ -77,9 +104,7 @@ public:
     std::list<NParamDec*> vec;
     NVarList(int lineno):lineno(lineno){}
     NVarList(){}
-    void push_front(NParamDec* ptr){
-        vec.push_front(ptr);
-    }
+    void push_front(NParamDec* ptr);
 };
 
 class NExtDecList:public Node{
@@ -155,7 +180,7 @@ public:
     const NSpecifier* spe;
     const NFuncDec* funcdef;
     const NCompSt* code;
-    NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){} 
+    NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code);
 };
 
 
@@ -179,11 +204,10 @@ public:
 	virtual void print(int i) const;
     const NExp* ptr;
     int type;
-    NExp(int lineno,const NExp& ptr,int type):lineno(lineno),ptr(&ptr),type(type){}
+    NExp(int lineno,NExp& ptr,int type);
     NExp(int lineno,const NExp& ptr):lineno(lineno),ptr(&ptr),type(0){}
     NExp(int lineno):lineno(lineno),ptr(NULL){}
     NExp():ptr(NULL){}
-
 };
 class NIdentifier : public NExp{
 public:
@@ -371,8 +395,7 @@ public:
     int op;
     const NExp* lhs;
     const NExp* rhs;
-    NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :lineno(lineno),
-        op(op),lhs(&lhs), rhs(&rhs){ }
+    NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs);
 };
 
 class NUnaryOperator : public NExp {
@@ -381,8 +404,7 @@ public:
 	virtual void print(int i) const;
     int op;
     const NExp* rhs;
-    NUnaryOperator(int lineno,NExp& rhs, int op) :lineno(lineno),
-        op(op),rhs(&rhs){ }
+    NUnaryOperator(int lineno,NExp& rhs, int op);
 };
 
 class NArrayIndex :public NExp{
@@ -391,8 +413,7 @@ public:
 	virtual void print(int i) const;
     const NExp* index;
     const NExp* arr;
-    NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),
-        index(&index),arr(&arr){}
+    NArrayIndex(int lineno,NExp& arr,NExp& index);
 };
 
 class NAssignment : public NExp {
@@ -401,8 +422,7 @@ public:
 	virtual void print(int i) const;
     const NExp* lhs;
     const NExp* rhs;
-    NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),
-        lhs(&lhs), rhs(&rhs) { }
+    NAssignment(int lineno,NExp& lhs, NExp& rhs);
 };
 
 class NStructMem :public NExp{
@@ -413,5 +433,6 @@ public:
     const NIdentifier* member;
     NStructMem(int lineno,const NExp& expr,const std::string member):lineno(lineno),expr(&expr){
         this->member=new NIdentifier(lineno,member);
+        //this->type=EID;
     }
 };
