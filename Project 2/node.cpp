@@ -98,9 +98,9 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),sp
         exit(-1);
         return;
     }
-    GlobalVariable* ptr=TheModule->getGlobalVariable((spe.spe)->id->name);
+    auto ptr=lookforname((spe.spe)->id->name);
     if(ptr==NULL){
-        //std::cout<<"Adding new variable "<<(spe.spe)->id->name<<std::endl;
+        //vector<Type*> members;
         TheModule->getOrInsertGlobal((spe.spe)->id->name,Builder->getInt8Ty());
     }else{
         //std::cout<<"Redefinition of variable"<<(spe.spe)->id->name<<std::endl;
@@ -113,13 +113,28 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList&
     auto type=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
     GlobalVariable* ptr;
     for(auto &var : extlist.vec){
-        ptr=TheModule->getGlobalVariable(var->id->name);
+        std::string tmpname;
+        int total=1;
+        if(var->next==NULL){
+            tmpname=var->id->name;
+        }else{
+            auto arrptr=var->next;
+            while(arrptr->next!=NULL){
+                total*=arrptr->length;
+                arrptr=arrptr->next;
+            }
+            tmpname=arrptr->id->name;
+        }
+        ptr=TheModule->getGlobalVariable(tmpname);
         if(ptr==NULL){
-            //std::cout<<"Adding new variable "<<var->id->name<<std::endl;
-            TheModule->getOrInsertGlobal(var->id->name,type);
+            if(var->next==NULL)
+                TheModule->getOrInsertGlobal(tmpname,type);
+            else{
+                TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type,total));
+            }
         }else{
             //std::cout<<"Redefinition of variable"<<var->id->name<<std::endl;
-            err_info(3,lineno,"Redefined of global variable",var->id->name.c_str());
+            err_info(3,lineno,"Redefined of variable",tmpname.c_str());
         }
     }
 }
@@ -234,6 +249,7 @@ NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&
         err_info(6,this->lineno,"Rval appears on the right","");
     }
     int tmptype=-1;
+    this->type=lhs.type;
     if(lhs.type&EID){
         tmptype=(this->type&EINT)?EINT:EFLOAT;
     }else if(lhs.type&ESTRUCT){
@@ -241,6 +257,7 @@ NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&
     }else if(lhs.type&EARRAY){
         tmptype=(this->type&EINT)?EINT:EFLOAT;
     }
+    //printf("Type1 %x, Type 2 %x\n",lhs.type,rhs.type);
     if((tmptype!=-1)&&(!(tmptype&rhs.type))){
         err_info(5,this->lineno,"Assignment type mismatched","");
     }
@@ -525,16 +542,14 @@ NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(
     }
 }
 
-NUnaryOperator::NUnaryOperator(int lineno,NExp& rhs, int op) :lineno(lineno),
-        op(op),rhs(&rhs){ 
+NUnaryOperator::NUnaryOperator(int lineno,NExp& rhs, int op) :lineno(lineno),op(op),rhs(&rhs){ 
     if(rhs.type&(EINT|EFLOAT)!=0){
         err_info(7,this->lineno,"Operand and operator's type mismatch","");
     }
     this->type=rhs.type&(EINT|EFLOAT);
 }
 
-NBinaryOperator::NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :lineno(lineno),
-        op(op),lhs(&lhs), rhs(&rhs){
+NBinaryOperator::NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :lineno(lineno),op(op),lhs(&lhs), rhs(&rhs){
     if((rhs.type&(EINT|EFLOAT))!=(lhs.type&(EINT|EFLOAT))){
         err_info(7,this->lineno,"Operands' type mismatch","");
     }

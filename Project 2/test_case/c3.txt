@@ -1,0 +1,8 @@
+int i;
+int u;
+int a[12];
+int a[12];
+int main(){
+    i=1;
+    u=2;
+}

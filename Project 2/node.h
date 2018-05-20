@@ -329,6 +329,7 @@ public:
     NVarDec(int lineno,NVarDec& next,int length):lineno(lineno),next(&next){
         
     	this->is_arr=0;
+        this->id=NULL;
         this->next->is_arr=1;
         this->length=length;
     }

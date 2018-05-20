@@ -2,9 +2,8 @@ int id;
 float id2;
 
 int main(){
-
+    int i[12];
     id=id2;
-    id[1.2]=12;
     id[12][23]=1;
     id<id2;
 }
