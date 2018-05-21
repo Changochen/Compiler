@@ -1,14 +1,9 @@
-int i[2];
-int u;
-int a[12];
 struct dd{
-    int test;
+    float test;
 };
 
 struct dd ss;
+
 int main(int kk){
     ss.test=1;
-    a.test=1;
-    i[0]=1;
-    u=2;
 }

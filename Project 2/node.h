@@ -201,6 +201,7 @@ public:
 class NExp : public NStmt {
 public:
     int lineno;
+    std::string structname;
 	virtual void print(int i) const;
     const NExp* ptr;
     int type;
@@ -266,7 +267,7 @@ public:
 	virtual void print(int i) const;
     const NSpecifier* spe;
     NDecList dlist;
-    NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno),spe(&spe),dlist(dlist){}
+    NDef(int lineno,const NSpecifier& spe,const NDecList& dlist);
 };
 
 class NDec :public NStmt{

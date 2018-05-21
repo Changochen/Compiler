@@ -75,6 +75,7 @@ void print_w(int i){
 void print_linno (int lineno,const char* s){
     std::printf("%s (%d)\n",s,lineno);
 }
+
 void NExtDefNormal::print(int i) const{
     print_w(i);
     print_linno(this->lineno,"ExtDef");
@@ -213,10 +214,11 @@ bool createVar(const NSpecifier &spe,const NVarDec &var){
     if(lookforname(name)!=NULL){
         err_info(3,spe.lineno,"Redefined of variable",name.c_str());
     }
-    printf("Creating var %s\n",name.c_str());
+    //printf("Creating var %s, is struct %d\n",name.c_str(),type->isStructTy());
     TheModule->getOrInsertGlobal(name,is_arr?ArrayType::get(type,total):type);
     return true;
 }
+
 NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){
     auto type=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
     GlobalVariable* ptr;
@@ -225,8 +227,12 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList&
     }
 }
 
+NDef::NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno),spe(&spe),dlist(dlist){
+    for(auto &var:dlist.vec){
+        createVar(spe,*(var->vardec));
+    }
+}
 NCompSt::NCompSt(int lineno):lineno(lineno){
-
 }
 
 void NMethodCall::check(){
@@ -270,51 +276,6 @@ NMethodCall::NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&
 void NCompSt::add(NDefList& dlist,NStmtList& slist){
     klist=slist;
     defList=dlist;
-    for(auto &ptr:defList.vec){
-        auto type=gettype(*(ptr->spe));
-        StructType* checkptr;
-        if(type==NULL){
-            if(ptr->spe->spe->is_def){
-                err_info(20,ptr->spe->spe->lineno,"No struct definition in function","");
-            }else{
-                checkptr=TheModule->getTypeByName(ptr->spe->spe->id->name);
-                //auto checkptr=lookforname(ptr->spe->spe->id->name);
-                if(checkptr==NULL||stable.find(ptr->spe->spe->id->name)==stable.end()){
-                    err_info(1,ptr->spe->spe->lineno,"Use of undefined structure",ptr->spe->spe->id->name.c_str());
-                    continue;
-                }else if(!checkptr->isStructTy()){
-                    err_info(1,ptr->spe->spe->lineno,"This is not a structure",ptr->spe->spe->id->name.c_str());
-                    continue;
-                }
-            }
-        }
-        for(auto &tvar:ptr->dlist.vec){
-            auto var=tvar->vardec;
-            std::string tmpname;
-            int total=1;
-            if(var->next==NULL){
-                tmpname=var->id->name;
-            }else{
-                auto arrptr=var->next;
-                while(arrptr->next!=NULL){
-                    total*=arrptr->length;
-                    arrptr=arrptr->next;
-                }
-                tmpname=arrptr->id->name;
-            }
-            auto pptr=TheModule->getGlobalVariable(tmpname);
-            if(pptr==NULL){
-                puts(tmpname.c_str());
-                if(var->next==NULL)
-                    TheModule->getOrInsertGlobal(tmpname,type==NULL?checkptr:type);
-                else{
-                    TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type==NULL?checkptr:type,total));
-                }
-            }else{
-                err_info(3,lineno,"Redefined of variable",tmpname.c_str());
-            }
-        }
-    }
 }
 
 void NVarList::push_front(NParamDec* ptr){
@@ -425,6 +386,7 @@ NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
                 this->type^=EID;
             }else if(ttype->isStructTy()){
                 tmptype=ESTRUCT;
+                this->structname=ptr->name;
                 this->type^=EID;
             }
         }
@@ -439,14 +401,8 @@ NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&
     }
     int tmptype=-1;
     this->type=lhs.type;
-    if(lhs.type&EID){
-        tmptype=(this->type&EINT)?EINT:EFLOAT;
-    }else if(lhs.type&ESTRUCT){
-        tmptype=(this->type&EINT)?EINT:EFLOAT;
-    }else if(lhs.type&EARRAY){
-        tmptype=(this->type&EINT)?EINT:EFLOAT;
-    }
-    //printf("Type1 %x, Type 2 %x\n",lhs.type,rhs.type);
+    tmptype=(this->type&EINT)?EINT:EFLOAT;
+    //printf("Type1 %x, Type 2 %x, tmp type %x\n",lhs.type,rhs.type,tmptype);
     if((tmptype!=-1)&&(!(tmptype&rhs.type))){
         err_info(5,this->lineno,"Assignment type mismatched","");
     }
@@ -723,7 +679,36 @@ NStructMem::NStructMem(int lineno,const NExp& expr,const std::string member):lin
         if(!(expr.type&ESTRUCT)){
             err_info(13,this->lineno,"Getting member of a non-struct variable","");
         }else{
-
+            if(stable.find(expr.structname)!=stable.end()){
+                err_info(21,this->lineno,"Getting member of a struct definition",expr.structname.c_str());
+            }else{
+                auto tmptype=lookforname(expr.structname);
+                std::string thename=tmptype->getStructName();
+                auto ttype=TheModule->getTypeByName(thename);
+                auto vartype=lookforname(member);
+                auto structname=ttype->getName();
+                unsigned int index=0;
+                for(index=0;index<stable[structname].size();index++){
+                    if(stable[structname][index]==member)break;
+                }
+                if(vartype==NULL||index==stable[structname].size()){
+                    err_info(13,this->lineno,"Getting a non-existing member",member.c_str());
+                }else{                    
+                    auto tmptype=ttype->getElementType(index);
+                    if(tmptype->isIntegerTy()){
+                        this->type|=EINT;
+                        this->type|=EID;
+                    }else if(tmptype->isFloatTy()){
+                        this->type|=EFLOAT;
+                        this->type|=EID;
+                    }else if(tmptype->isStructTy()){
+                        this->type|=ESTRUCT;
+                        this->structname=member;
+                    }else if(tmptype->isArrayTy()){
+                        this->type|=EARRAY;
+                    }
+                }
+            }
         }
 }
 NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(&index),arr(&arr){

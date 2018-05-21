@@ -184,7 +184,7 @@ Exp  : Exp TASSIGN Exp { $$ = new NAssignment($1->lineno,*$1, *$3); $$=new NExp(
      | TID TLP Args TRP {$$ = new NMethodCall($3->lineno,*(new NIdentifier(yylineno,*$1)), *$3);$$=new NExp($3->lineno,*$$,0);}
      | TID TLP TRP {$$ = new NMethodCall(yylineno,*(new NIdentifier(yylineno,*$1)));$$=new NExp(yylineno,*$$,0);}
      | Exp TLB Exp TRB {$$=new NArrayIndex($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL|($1->type&(EFLOAT|EINT))) ;}
-     | Exp TDOT TID {$$=new NStructMem($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL);}
+     | Exp TDOT TID {$$=new NStructMem($1->lineno,*$1,*$3);$$=new NExp($1->lineno,*$$,ERVAL|$$->type&(EFLOAT|EINT|ESTRUCT|EARRAY));}
      | TID {$$=new NIdentifier(yylineno,*$1);$$=new NExp(yylineno,*$$,ERVAL|EID);}
      | TINT {$$ = new NInteger(yylineno,*$1);$$=new NExp(yylineno,*$$,EINT);}
      | TFLOAT {$$ = new NDouble(yylineno,atof($1->c_str()));$$=new NExp(yylineno,*$$,EFLOAT);}
