@@ -431,8 +431,5 @@ public:
 	virtual void print(int i) const;
     const NExp* expr;
     const NIdentifier* member;
-    NStructMem(int lineno,const NExp& expr,const std::string member):lineno(lineno),expr(&expr){
-        this->member=new NIdentifier(lineno,member);
-        //this->type=EID;
-    }
+    NStructMem(int lineno,const NExp& expr,const std::string member);
 };

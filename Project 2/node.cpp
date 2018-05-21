@@ -4,6 +4,7 @@
 #include "node.h"
 #include "parser.hpp"
 //#include "token.hpp"
+
 using namespace llvm;
 static std::unique_ptr<Module> TheModule,CurModule;
 static LLVMContext* TheContext , *CurContext;
@@ -46,7 +47,6 @@ void module_init(){
     CurContext=NULL;
     Builder=new IRBuilder<>(*TheContext);
     TheModule = llvm::make_unique<Module>("Global Context",*TheContext);
-    //    std::cout<<"init"<<std::endl;
 }
 
 NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
@@ -114,7 +114,8 @@ Type* gettype(const NSpecifier &spe){
     return NULL;
 }
 
-NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
+Type* defineStructure(const NSpecifier &spe){
+    auto lineno=spe.lineno;
     auto ptr=lookforname((spe.spe)->id->name);
     std::map<std::string,Type*> ivec;
     if(ptr==NULL){       
@@ -122,11 +123,17 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),sp
         for(auto &p1:structptr->defList.vec){
             auto tmptype=gettype(*(p1->spe));
             if(tmptype==NULL){  //if structure
-
+                auto sptr=defineStructure(*(p1->spe));
+                if(sptr!=NULL){
+                    if(ivec.find(p1->spe->spe->id->name)==ivec.end()){
+                        ivec[p1->spe->spe->id->name]=sptr;
+                    }
+                }
             }else{
                 for(auto &p2:p1->dlist.vec){  //if normal var or array;
                     if(p2->is_assign){
-                        err_info(15,p2->lineno,"Initialization in definition","");
+                        err_info(15,p2->lineno,"Initialization in definition of stucture","");
+                        return NULL;
                     }else{
                         auto p3=p2->vardec;
                         if(p3->next==NULL){
@@ -135,6 +142,7 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),sp
                             }
                             else{
                                 err_info(15,p2->lineno,"Collision of member definition","");
+                                return NULL;
                             }
                         }else{
                             int total=1;
@@ -148,45 +156,72 @@ NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),sp
                             }
                             else{
                                 err_info(15,p2->lineno,"Collision of member definition","");
+                                return NULL;
                             }  
                         }
                     }
                 }
             }
         }
-        TheModule->getOrInsertGlobal((spe.spe)->id->name,createStructType((spe.spe)->id->name,ivec));
+        auto res=createStructType((spe.spe)->id->name,ivec);
+        TheModule->getOrInsertGlobal((spe.spe)->id->name,res);
+        return res;
     }else{
         err_info(3,lineno,"Redefined of structure",(spe.spe)->id->name.c_str());
+        return NULL;
     }
-    return;
+    return NULL;
 }
 
+NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
+    if(spe.is_struct){
+        if(spe.spe->is_def){
+            defineStructure(spe);
+        }      
+    }   
+}
+
+bool checkStructHasDef(const NSpecifier &spe){
+    if(!spe.is_struct)return false;
+    return stable.find(spe.spe->id->name)!=stable.end();
+}
+
+bool createVar(const NSpecifier &spe,const NVarDec &var){
+    auto type=gettype(spe);
+    std::string name;
+    int total=1;
+    bool is_arr=true;
+    auto next=var.next;
+    if(next==NULL){
+        name=var.id->name;
+        is_arr=false;
+    }else{
+        while(next->next!=NULL){
+            total*=var.length;
+            next=next->next;
+        }
+        name=next->id->name;
+    }
+    if(type==NULL){
+        if(checkStructHasDef(spe)==false){
+            err_info(17,spe.lineno,"Structure is not defined","");
+            return false;
+        }else{
+            type=lookforname(spe.spe->id->name);
+        }
+    }
+    if(lookforname(name)!=NULL){
+        err_info(3,spe.lineno,"Redefined of variable",name.c_str());
+    }
+    printf("Creating var %s\n",name.c_str());
+    TheModule->getOrInsertGlobal(name,is_arr?ArrayType::get(type,total):type);
+    return true;
+}
 NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){
     auto type=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
     GlobalVariable* ptr;
     for(auto &var : extlist.vec){
-        std::string tmpname;
-        int total=1;
-        if(var->next==NULL){
-            tmpname=var->id->name;
-        }else{
-            auto arrptr=var->next;
-            while(arrptr->next!=NULL){
-                total*=arrptr->length;
-                arrptr=arrptr->next;
-            }
-            tmpname=arrptr->id->name;
-        }
-        ptr=TheModule->getGlobalVariable(tmpname);
-        if(ptr==NULL){
-            if(var->next==NULL)
-                TheModule->getOrInsertGlobal(tmpname,type);
-            else{
-                TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type,total));
-            }
-        }else{
-            err_info(3,lineno,"Redefined of variable",tmpname.c_str());
-        }
+        createVar(spe,*var);
     }
 }
 
@@ -237,18 +272,21 @@ void NCompSt::add(NDefList& dlist,NStmtList& slist){
     defList=dlist;
     for(auto &ptr:defList.vec){
         auto type=gettype(*(ptr->spe));
+        StructType* checkptr;
         if(type==NULL){
-            if(!ptr->spe->spe->is_def){
+            if(ptr->spe->spe->is_def){
                 err_info(20,ptr->spe->spe->lineno,"No struct definition in function","");
             }else{
-                auto checkptr=lookforname(ptr->spe->spe->id->name);
-                if(checkptr==NULL){
+                checkptr=TheModule->getTypeByName(ptr->spe->spe->id->name);
+                //auto checkptr=lookforname(ptr->spe->spe->id->name);
+                if(checkptr==NULL||stable.find(ptr->spe->spe->id->name)==stable.end()){
                     err_info(1,ptr->spe->spe->lineno,"Use of undefined structure",ptr->spe->spe->id->name.c_str());
+                    continue;
                 }else if(!checkptr->isStructTy()){
-                    err_info(1,ptr->spe->spe->lineno,"This is a structure",ptr->spe->spe->id->name.c_str());
+                    err_info(1,ptr->spe->spe->lineno,"This is not a structure",ptr->spe->spe->id->name.c_str());
+                    continue;
                 }
             }
-            continue;
         }
         for(auto &tvar:ptr->dlist.vec){
             auto var=tvar->vardec;
@@ -266,10 +304,11 @@ void NCompSt::add(NDefList& dlist,NStmtList& slist){
             }
             auto pptr=TheModule->getGlobalVariable(tmpname);
             if(pptr==NULL){
+                puts(tmpname.c_str());
                 if(var->next==NULL)
-                    TheModule->getOrInsertGlobal(tmpname,type);
+                    TheModule->getOrInsertGlobal(tmpname,type==NULL?checkptr:type);
                 else{
-                    TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type,total));
+                    TheModule->getOrInsertGlobal(tmpname,ArrayType::get(type==NULL?checkptr:type,total));
                 }
             }else{
                 err_info(3,lineno,"Redefined of variable",tmpname.c_str());
@@ -296,7 +335,6 @@ NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcde
         auto rettype=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
         for(auto &retcheck:code.klist.vec){
             if(retcheck->type==2){
-                //puts("Get fuck!");
                 auto tptr=dynamic_cast<const NReturnStmt*>(retcheck->ptr);
                 if((tptr->res->type==EINT)&&rettype->isIntegerTy()||(tptr->res->type==EFLOAT)&&rettype->isFloatTy()){
 
@@ -384,6 +422,9 @@ NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
                 tmptype=EFLOAT;
             }else if(ttype->isArrayTy()){
                 tmptype=EARRAY;
+                this->type^=EID;
+            }else if(ttype->isStructTy()){
+                tmptype=ESTRUCT;
                 this->type^=EID;
             }
         }
@@ -677,6 +718,14 @@ void NStructMem::print(int i)const{
     this->member->print(i);
 }
 
+NStructMem::NStructMem(int lineno,const NExp& expr,const std::string member):lineno(lineno),expr(&expr){
+        this->member=new NIdentifier(lineno,member);
+        if(!(expr.type&ESTRUCT)){
+            err_info(13,this->lineno,"Getting member of a non-struct variable","");
+        }else{
+
+        }
+}
 NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(&index),arr(&arr){
     if(arr.type&EID){
         err_info(10,this->lineno,"Indexing a non-array variable","");

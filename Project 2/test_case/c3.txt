@@ -1,14 +1,14 @@
 int i[2];
 int u;
 int a[12];
-int a[12];
 struct dd{
-    int test=1;
     int test;
 };
+
+struct dd ss;
 int main(int kk){
-    struct d a;
-    int u;
+    ss.test=1;
+    a.test=1;
     i[0]=1;
     u=2;
 }
