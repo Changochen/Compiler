@@ -287,7 +287,8 @@ public:
     int lineno;
 	virtual void print(int i) const;
     const NExp* res;
-    NReturnStmt(int lineno,NExp& res):lineno(lineno),res(&res){}
+    NReturnStmt(int lineno,NExp& res):lineno(lineno),res(&res){
+    }
 };
 
 class NIfStmt : public NStmt{

@@ -1,9 +1,0 @@
-struct dd{
-    float test;
-};
-
-struct dd ss;
-
-int main(int kk){
-    ss.test=1;
-}

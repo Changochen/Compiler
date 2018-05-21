@@ -254,10 +254,8 @@ void NMethodCall::check(){
         auto args=tttype->params();
         for(auto iter=arguments.vec.begin();iter!=arguments.vec.end();iter++,i++){
             if((((*iter)->type&EINT)&&args[i]->isIntegerTy())||(((*iter)->type&EFLOAT)&&args[i]->isFloatTy())){
-                //std::cout<<"Pass"<<std::endl;
             }else{
                 flag=false;
-                //std::cout<<"Not Pass"<<std::endl;
                 break;
             }
         }
@@ -286,7 +284,9 @@ void NVarList::push_front(NParamDec* ptr){
         }
     }
     this->vec.push_front(ptr);
+    createVar(*(ptr->spe),*(ptr->vardec));
 }
+
 
 NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){
     std::vector<Type*> args;
@@ -297,7 +297,21 @@ NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcde
         for(auto &retcheck:code.klist.vec){
             if(retcheck->type==2){
                 auto tptr=dynamic_cast<const NReturnStmt*>(retcheck->ptr);
-                if((tptr->res->type==EINT)&&rettype->isIntegerTy()||(tptr->res->type==EFLOAT)&&rettype->isFloatTy()){
+                auto curtype=tptr->res->type;
+                //printf("Curtype %x\n",curtype);
+                /*
+                if(tptr->res->type&EID){
+                    auto ttp=dynamic_cast<const NIdentifier*>(tptr->res);
+                    getchar();
+                    auto re=lookforname(ttp->name);
+                    getchar();
+                    if(re!=NULL){
+                        if(re->isIntegerTy())curtype|=EINT;
+                        if(re->isFloatTy())curtype|=EFLOAT;
+                    }
+                }
+                */
+                if((curtype&EINT)&&rettype->isIntegerTy()||(curtype&EFLOAT)&&rettype->isFloatTy()){
 
                 }else{
                     err_info(8,this->lineno,"type of return value mismatched","");
@@ -307,8 +321,10 @@ NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcde
         for(auto &tmp: funcdef.dlist.vec){
             if(tmp->spe->is_struct){
                 err_info(19,lineno,"Not supported struct args yet","");
+                return;
             }
             auto tmptype=(tmp->spe->type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+            //TheModule->getOrInsertGlobal(tmp->vardec->id->name,tmptype);
             args.push_back(tmptype);
         }
         FunctionType *FT =FunctionType::get(rettype, args, false);
@@ -391,12 +407,13 @@ NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
             }
         }
     }
+    //printf("Tmpytype %x\n",tmptype);
     if(tmptype!=-1){
         this->type|=tmptype;
     }
 }
 NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&lhs), rhs(&rhs){
-    if(!(lhs.type|ERVAL)){
+    if(!(lhs.type&ERVAL)){
         err_info(6,this->lineno,"Rval appears on the right","");
     }
     int tmptype=-1;
