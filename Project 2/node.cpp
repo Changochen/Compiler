@@ -378,10 +378,10 @@ void NExpList::print(int i) const{
     print_linno(this->lineno,"Args");
     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
         (*iter)->print(i+2);
-        if((++iter)!=this->vec.end()){
+        if(true){
             print_w(i+2);
             std::printf("COMMA\n");
-            iter--;
+            //iter--;
         }
     }
 }
