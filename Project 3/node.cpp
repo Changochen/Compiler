@@ -239,6 +239,7 @@ NDef::NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno
         createVar(spe,*(var->vardec));
     }
 }
+
 NCompSt::NCompSt(int lineno):lineno(lineno){
 
 }
@@ -277,6 +278,7 @@ void NMethodCall::check(){
         err_info(9,this->lineno,"Not matching function arguments",id->name.c_str());
     }
 }
+
 NMethodCall::NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id){
     arguments.vec.clear();
     check();  
@@ -439,7 +441,7 @@ NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&
     int tmptype=-1;
     this->type|=lhs.type;
     tmptype=(this->type&EINT)?EINT:EFLOAT;
-    
+
     if((tmptype!=-1)&&(!(tmptype&rhs.type))){
         err_info(5,this->lineno,"Assignment type mismatched","");
     }
@@ -711,7 +713,7 @@ void NStructMem::print(int i)const{
     this->member->print(i);
 }
 
-NStructMem::NStructMem(int lineno,const NExp& expr,const std::string member):lineno(lineno),expr(&expr){
+NStructMem::NStructMem(int lineno,NExp& expr,std::string member):lineno(lineno),expr(&expr){
     this->member=new NIdentifier(lineno,member);
     if(!(expr.type&ESTRUCT)){
         err_info(13,this->lineno,"Getting member of a non-struct variable","");
@@ -817,7 +819,7 @@ Value* NIdentifier::codegen(){
     auto res=TheModule->getGlobalVariable(name);
 
     this->codeval=TheModule->getGlobalVariable(name);
-    if(res->getValueType()->isArrayTy()){
+    if(res->getValueType()->isArrayTy()||res->getValueType()->isStructTy()){
         return this->codeval;
     }
     if(isStore==false){
@@ -882,12 +884,6 @@ Value* NUnaryOperator::codegen(){
 }
 
 Value* NCompSt::codegen(){
-    /*
-    for(auto &local : defList.vec){
-        for(auto &eachone: local->dlist){
-            localmap[eachone->]
-        }
-    }*/
     return klist.codegen();
 }
 
@@ -1001,13 +997,33 @@ Value* NArrayIndex::codegen(){
         return NULL;
     }
 
-    //Builder->CreateGEP(arr,index,"test");
     auto res=Builder->CreateGEP(Type::getInt32Ty(*TheContext),arr,index,"test");
     if(isStore){
         return this->codeval=res;
     }
     else{
-        //return this->codeval=Builder->CreateExtractElement(arr,idx,"elem");
         return this->codeval=Builder->CreateLoad(res,"tmp");
     }
+}
+
+Value* NStructMem::codegen(){
+    auto s=expr->codegen();
+    auto mem=member->codegen();
+
+    unsigned index=0;
+
+    auto sn=s->getName().str();
+    auto stype=lookforname(sn);
+
+    auto sname=stype->getStructName();
+    if(stable.find(sname)!=stable.end()){
+        for(auto &i : stable[sname]){
+            if(i!=this->member->name){
+                index++;
+            }else{
+                break;
+            }
+        }
+    }
+    return this->codeval=Builder->CreateGEP(stype,s,ConstantInt::get(*TheContext,APInt(32,index)),"member");
 }

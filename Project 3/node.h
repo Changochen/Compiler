@@ -503,10 +503,8 @@ class NStructMem :public NExp{
 public:
     int lineno;
 	virtual void print(int i) const;
-    const NExp* expr;
-    const NIdentifier* member;
-    NStructMem(int lineno,const NExp& expr,const std::string member);
-    virtual Value *codegen(){
-        return NULL;
-    };
+    NExp* expr;
+    NIdentifier* member;
+    NStructMem(int lineno,NExp& expr,std::string member);
+    virtual Value *codegen();
 };
