@@ -483,12 +483,10 @@ class NArrayIndex :public NExp{
 public:
     int lineno;
 	virtual void print(int i) const;
-    const NExp* index;
-    const NExp* arr;
+    NExp* index;
+    NExp* arr;
     NArrayIndex(int lineno,NExp& arr,NExp& index);
-    virtual Value *codegen(){
-        return NULL;
-    };
+    virtual Value *codegen();
 };
 
 class NAssignment : public NExp {

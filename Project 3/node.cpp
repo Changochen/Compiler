@@ -13,8 +13,8 @@ static ContextStack contextstack;
 static std::map<std::string,std::vector<std::string> > stable;
 BasicBlock* curBasicBlock,*trueBlock,*falseBlock;
 std::map<std::string , Value*> localmap;
-
-bool isStore;
+Value* idx;
+bool isStore,isArr;
 
 void ContextStack::pop(){
     delete CurContext;
@@ -198,13 +198,13 @@ bool createVar(const NSpecifier &spe,const NVarDec &var){
     std::string name;
     int total=1;
     bool is_arr=true;
-    auto next=var.next;
+    auto next=&var;
     if(next==NULL){
         name=var.id->name;
         is_arr=false;
     }else{
         while(next->next!=NULL){
-            total*=var.length;
+            total*=next->length;
             next=next->next;
         }
         name=next->id->name;
@@ -220,7 +220,8 @@ bool createVar(const NSpecifier &spe,const NVarDec &var){
     if(lookforname(name)!=NULL){
         err_info(3,spe.lineno,"Redefined of variable",name.c_str());
     }
-    //printf("Creating var %s, is struct %d\n",name.c_str(),type->isStructTy());
+    if(total==1)is_arr=false;
+    //std::printf("Array length %d\n",total);
     TheModule->getOrInsertGlobal(name,is_arr?ArrayType::get(type,total):type);
     return true;
 }
@@ -411,6 +412,12 @@ NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
                 tmptype=EFLOAT;
             }else if(ttype->isArrayTy()){
                 tmptype=EARRAY;
+
+                if(ttype->getArrayElementType()->isIntegerTy()){
+                    tmptype|=EINT;
+                }else if(ttype->getArrayElementType()->isFloatTy()){
+                    tmptype|=EFLOAT;
+                }
                 this->type^=EID;
             }else if(ttype->isStructTy()){
                 tmptype=ESTRUCT;
@@ -430,12 +437,13 @@ NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&
         err_info(6,this->lineno,"Rval appears on the right","");
     }
     int tmptype=-1;
-    this->type=lhs.type;
+    this->type|=lhs.type;
     tmptype=(this->type&EINT)?EINT:EFLOAT;
+    
     if((tmptype!=-1)&&(!(tmptype&rhs.type))){
         err_info(5,this->lineno,"Assignment type mismatched","");
     }
-    this->type=tmptype;
+    this->type|=tmptype;
 }
 
 void NBlock::print(int i) const{
@@ -747,7 +755,7 @@ NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(
     }else if(arr.type&EARRAY){
         this->type|=EARRAY;
     }
-    this->type|=arr.type&(EINT|EFLOAT);
+    this->type|=(EINT|EFLOAT);
     if((index.type&EINT)==0){
         err_info(12,this->lineno,"Non-integer array index","");
     }
@@ -806,7 +814,12 @@ Value* NExp::codegen(){
 }
 
 Value* NIdentifier::codegen(){
+    auto res=TheModule->getGlobalVariable(name);
+
     this->codeval=TheModule->getGlobalVariable(name);
+    if(res->getValueType()->isArrayTy()){
+        return this->codeval;
+    }
     if(isStore==false){
         return Builder->CreateLoad(this->codeval,"tmp");
     }
@@ -886,7 +899,6 @@ Value* NStmtList::codegen(){
 }
 
 Value* NIfStmt::codegen(){
-    //std::puts("Go if");
     auto CondV=this->condition->codegen();
     Function *TheFunction = Builder->GetInsertBlock()->getParent();
     BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
@@ -928,6 +940,7 @@ Value* NAssignment::codegen(){
     if(L==NULL||R==NULL){
         return NULL;
     }
+
     return Builder->CreateStore(L,R);
 }
 
@@ -954,9 +967,9 @@ Value* NMethodCall::codegen(){
 Value* NWhileStmt::codegen(){
 
     Function *TheFunction = Builder->GetInsertBlock()->getParent();
-    BasicBlock *preBB= BasicBlock::Create(*TheContext, "start", TheFunction);
+    BasicBlock *preBB= BasicBlock::Create(*TheContext, "con", TheFunction);
     BasicBlock *bodyBB = BasicBlock::Create(*TheContext, "body");
-    BasicBlock *nextBB = BasicBlock::Create(*TheContext, "whilecont");
+    BasicBlock *nextBB = BasicBlock::Create(*TheContext, "next");
 
 
     Builder->SetInsertPoint(preBB);
@@ -978,4 +991,23 @@ Value* NWhileStmt::codegen(){
     Builder->SetInsertPoint(nextBB);
 
     return NULL;
+}
+
+Value* NArrayIndex::codegen(){
+    auto arr=this->arr->codegen();
+    auto index=this->index->codegen();
+
+    if(index==NULL||arr==NULL){
+        return NULL;
+    }
+
+    //Builder->CreateGEP(arr,index,"test");
+    auto res=Builder->CreateGEP(Type::getInt32Ty(*TheContext),arr,index,"test");
+    if(isStore){
+        return this->codeval=res;
+    }
+    else{
+        //return this->codeval=Builder->CreateExtractElement(arr,idx,"elem");
+        return this->codeval=Builder->CreateLoad(res,"tmp");
+    }
 }
