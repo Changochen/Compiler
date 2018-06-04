@@ -814,16 +814,16 @@ Value* NInteger::codegen(){
 }
 
 Value* NReturnStmt::codegen(){    
-	this->res->codegen();
-	auto res=Builder->CreateRet(this->res->codeval);
-	return this->codeval=res;
+    this->res->codegen();
+    auto res=Builder->CreateRet(this->res->codeval);
+    return this->codeval=res;
 }
 
 Value* NExp::codegen(){
-	if(ptr!=NULL){
-		return this->codeval=ptr->codegen();
-	}
-	return NULL;
+    if(ptr!=NULL){
+        return this->codeval=ptr->codegen();
+    }
+    return NULL;
 }
 
 Value* NIdentifier::codegen(){
@@ -842,41 +842,41 @@ Value* NIdentifier::codegen(){
 }
 
 Value* NBinaryOperator::codegen(){
-	Value* L=lhs->codegen();
-	Value* R=rhs->codegen();
+    Value* L=lhs->codegen();
+    Value* R=rhs->codegen();
 
-	if(L==NULL||R==NULL){
-		return NULL;
-	}
+    if(L==NULL||R==NULL){
+        return NULL;
+    }
 
-	switch(op){
-		case TAND:
-			return lhs->type&TINT?Builder->CreateAnd(L,R,"tmp_and"):Builder->CreateAnd(L,R,"tmp_and");
-		case TOR:
-			return lhs->type&TINT?Builder->CreateOr(L,R,"tmp_or"):Builder->CreateOr(L,R,"tmp_or");
-		case TMUL:
-			return lhs->type&TINT?Builder->CreateMul(L,R,"tmp_mul"):Builder->CreateFMul(L,R,"tmp_mul");
-		case TDIV:
-			return lhs->type&TINT?Builder->CreateUDiv(L,R,"tmp_div"):Builder->CreateFDiv(L,R,"tmp_div");
-		case TMINUS:
-			return lhs->type&TINT?Builder->CreateSub(L,R,"tmp_sub"):Builder->CreateFSub(L,R,"tmp_sub");
-		case TPLUS:
-			return lhs->type&TINT?Builder->CreateAdd(L,R,"tmp_add"):Builder->CreateFAdd(L,R,"tmp_add");
-		case TEQ:
-			return lhs->type&TINT?Builder->CreateICmpEQ(L,R,"tmp_eq"):Builder->CreateFCmpOEQ(L,R,"tmp_eq");
-		case TNE:
-			return lhs->type&TINT?Builder->CreateICmpNE(L,R,"tmp_neq"):Builder->CreateFCmpONE(L,R,"tmp_neq");
-		case TLT:
-			return (lhs->type&TINT)?Builder->CreateICmpSLT(L,R,"tmp_lt"):Builder->CreateFCmpOLT(L,R,"tmp_lt");
-		case TLE:
-			return lhs->type&TINT?Builder->CreateICmpSLE(L,R,"tmp_le"):Builder->CreateFCmpOLE(L,R,"tmp_le");
-		case TGT:
-			return lhs->type&TINT?Builder->CreateICmpSGT(L,R,"tmp_gt"):Builder->CreateFCmpOGT(L,R,"tmp_gt");
-		case TGE:
-			return lhs->type&TINT?Builder->CreateICmpSGE(L,R,"tmp_ge"):Builder->CreateFCmpOGE(L,R,"tmp_ge");
-		default:
-			return NULL;
-	}
+    switch(op){
+    case TAND:
+        return lhs->type&TINT?Builder->CreateAnd(L,R,"tmp_and"):Builder->CreateAnd(L,R,"tmp_and");
+    case TOR:
+        return lhs->type&TINT?Builder->CreateOr(L,R,"tmp_or"):Builder->CreateOr(L,R,"tmp_or");
+    case TMUL:
+        return lhs->type&TINT?Builder->CreateMul(L,R,"tmp_mul"):Builder->CreateFMul(L,R,"tmp_mul");
+    case TDIV:
+        return lhs->type&TINT?Builder->CreateUDiv(L,R,"tmp_div"):Builder->CreateFDiv(L,R,"tmp_div");
+    case TMINUS:
+        return lhs->type&TINT?Builder->CreateSub(L,R,"tmp_sub"):Builder->CreateFSub(L,R,"tmp_sub");
+    case TPLUS:
+        return lhs->type&TINT?Builder->CreateAdd(L,R,"tmp_add"):Builder->CreateFAdd(L,R,"tmp_add");
+    case TEQ:
+        return lhs->type&TINT?Builder->CreateICmpEQ(L,R,"tmp_eq"):Builder->CreateFCmpOEQ(L,R,"tmp_eq");
+    case TNE:
+        return lhs->type&TINT?Builder->CreateICmpNE(L,R,"tmp_neq"):Builder->CreateFCmpONE(L,R,"tmp_neq");
+    case TLT:
+        return (lhs->type&TINT)?Builder->CreateICmpSLT(L,R,"tmp_lt"):Builder->CreateFCmpOLT(L,R,"tmp_lt");
+    case TLE:
+        return lhs->type&TINT?Builder->CreateICmpSLE(L,R,"tmp_le"):Builder->CreateFCmpOLE(L,R,"tmp_le");
+    case TGT:
+        return lhs->type&TINT?Builder->CreateICmpSGT(L,R,"tmp_gt"):Builder->CreateFCmpOGT(L,R,"tmp_gt");
+    case TGE:
+        return lhs->type&TINT?Builder->CreateICmpSGE(L,R,"tmp_ge"):Builder->CreateFCmpOGE(L,R,"tmp_ge");
+    default:
+        return NULL;
+    }
 }
 
 Value* NUnaryOperator::codegen(){
@@ -885,12 +885,12 @@ Value* NUnaryOperator::codegen(){
         return NULL;
     }
     switch(op){
-        case TNOT:
-            return this->codeval=Builder->CreateNot(R,"tmp_not");
-        case TMINUS:
-            return this->codeval=Builder->CreateNeg(R,"tmp_neg");
-        default:
-            return NULL;
+    case TNOT:
+        return this->codeval=Builder->CreateNot(R,"tmp_not");
+    case TMINUS:
+        return this->codeval=Builder->CreateNeg(R,"tmp_neg");
+    default:
+        return NULL;
     }   
 }
 
@@ -911,13 +911,13 @@ Value* NIfStmt::codegen(){
     BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
     BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
     BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
-    
+
     if(this->elstmt!=NULL){
         Builder->CreateCondBr(CondV, ThenBB, ElseBB);
     }else{
         Builder->CreateCondBr(CondV, ThenBB, MergeBB);
     }
-    
+
 
     Builder->SetInsertPoint(ThenBB);
     this->ifstmt->codegen();
@@ -983,7 +983,7 @@ Value* NWhileStmt::codegen(){
     auto CondV=this->condition->codegen();
 
     preBB=Builder->GetInsertBlock();
-    
+
     Builder->CreateCondBr(CondV, bodyBB, nextBB);    
 
     Builder->SetInsertPoint(bodyBB);
