@@ -886,9 +886,8 @@ Value* NStmtList::codegen(){
 }
 
 Value* NIfStmt::codegen(){
-    std::puts("Go if");
+    //std::puts("Go if");
     auto CondV=this->condition->codegen();
-    //CondV = Builder->CreateFCmpONE(CondV, ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
     Function *TheFunction = Builder->GetInsertBlock()->getParent();
     BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
     BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
@@ -917,11 +916,6 @@ Value* NIfStmt::codegen(){
     }
     TheFunction->getBasicBlockList().push_back(MergeBB);
     Builder->SetInsertPoint(MergeBB);
-    //PHINode *PN =Builder->CreatePHI(Type::getDoubleTy(TheContext), 2, "iftmp");
-
-    //PN->addIncoming(ThenV, ThenBB);
-    //PN->addIncoming(ElseV, ElseBB);
-    //return PN;
     return NULL;
 }
 
@@ -955,4 +949,33 @@ Value* NMethodCall::codegen(){
     }
 
     return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
+}
+
+Value* NWhileStmt::codegen(){
+
+    Function *TheFunction = Builder->GetInsertBlock()->getParent();
+    BasicBlock *preBB= BasicBlock::Create(*TheContext, "start", TheFunction);
+    BasicBlock *bodyBB = BasicBlock::Create(*TheContext, "body");
+    BasicBlock *nextBB = BasicBlock::Create(*TheContext, "whilecont");
+
+
+    Builder->SetInsertPoint(preBB);
+    auto CondV=this->condition->codegen();
+
+    preBB=Builder->GetInsertBlock();
+    
+    Builder->CreateCondBr(CondV, bodyBB, nextBB);    
+
+    Builder->SetInsertPoint(bodyBB);
+    this->body->codegen();
+
+    Builder->CreateBr(preBB);
+    bodyBB = Builder->GetInsertBlock();
+
+    TheFunction->getBasicBlockList().push_back(bodyBB);
+
+    TheFunction->getBasicBlockList().push_back(nextBB);
+    Builder->SetInsertPoint(nextBB);
+
+    return NULL;
 }

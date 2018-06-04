@@ -368,12 +368,10 @@ class NWhileStmt :public NStmt{
 public:
     int lineno;
 	virtual void print(int i) const;
-    const NExp* condition;
-    const NStmt* body;
+    NExp* condition;
+    NStmt* body;
     NWhileStmt(int lineno,NExp& condition,NStmt& body):lineno(lineno),condition(&condition),body(&body){}
-    virtual Value *codegen(){
-        return NULL;
-    };
+    virtual Value *codegen();
 };
 
 
