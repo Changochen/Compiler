@@ -6,11 +6,15 @@
 //#include "token.hpp"
 
 using namespace llvm;
-static std::unique_ptr<Module> TheModule,CurModule;
+std::unique_ptr<Module> TheModule,CurModule;
 static LLVMContext* TheContext , *CurContext;
-static IRBuilder<> *Builder;
+static IRBuilder<llvm::NoFolder> *Builder;
 static ContextStack contextstack;
 static std::map<std::string,std::vector<std::string> > stable;
+BasicBlock* curBasicBlock,*trueBlock,*falseBlock;
+std::map<std::string , Value*> localmap;
+
+bool isStore;
 
 void ContextStack::pop(){
     delete CurContext;
@@ -26,7 +30,7 @@ void ContextStack::pop(){
 
 Type* lookforname(std::string name){
     if(CurContext!=NULL){
-        auto k=CurModule->getGlobalVariable(name);
+        auto k=TheModule->getGlobalVariable(name);
         if(k!=NULL){
             return k->getValueType();
         }
@@ -45,8 +49,10 @@ void ContextStack::push(){
 void module_init(){
     TheContext=new LLVMContext();
     CurContext=NULL;
-    Builder=new IRBuilder<>(*TheContext);
-    TheModule = llvm::make_unique<Module>("Global Context",*TheContext);
+    Builder=new IRBuilder<llvm::NoFolder>(*TheContext);
+    TheModule = llvm::make_unique<Module>("Program",*TheContext);
+    curBasicBlock=trueBlock=falseBlock=NULL;
+    isStore=false;
 }
 
 NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
@@ -233,12 +239,12 @@ NDef::NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno
     }
 }
 NCompSt::NCompSt(int lineno):lineno(lineno){
+
 }
 
 void NMethodCall::check(){
     auto ttype=TheModule->getFunction(id->name);
     bool flag=true;
-    //puts("Hello?");
     if(ttype==NULL){
         if(lookforname(id->name)){
             err_info(11,this->lineno,"Calling a non-callable variable",id->name.c_str());
@@ -249,8 +255,12 @@ void NMethodCall::check(){
     }
     int i=0;
     auto tttype=ttype->getFunctionType();
+    if(tttype->getReturnType()->isIntegerTy()){
+        this->type=EINT;
+    }else{
+        this->type=EFLOAT;
+    }
     if(arguments.vec.size()==tttype->getNumParams()){
-        //std::cout<<arguments.vec.size()<<std::endl;
         auto args=tttype->params();
         for(auto iter=arguments.vec.begin();iter!=arguments.vec.end();iter++,i++){
             if((((*iter)->type&EINT)&&args[i]->isIntegerTy())||(((*iter)->type&EFLOAT)&&args[i]->isFloatTy())){
@@ -268,7 +278,7 @@ void NMethodCall::check(){
 }
 NMethodCall::NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id){
     arguments.vec.clear();
-    check();
+    check();  
 }
 
 void NCompSt::add(NDefList& dlist,NStmtList& slist){
@@ -290,27 +300,15 @@ void NVarList::push_front(NParamDec* ptr){
 
 NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){
     std::vector<Type*> args;
+
     if(TheModule->getFunction(funcdef.id->name)!=NULL){
         err_info(4,lineno,"Redefined of function",funcdef.id->name.c_str());
     }else{
-        auto rettype=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+        auto rettype=(spe.type&TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
         for(auto &retcheck:code.klist.vec){
-            if(retcheck->type==2){
+            if(retcheck->type==SRETURN){
                 auto tptr=dynamic_cast<const NReturnStmt*>(retcheck->ptr);
                 auto curtype=tptr->res->type;
-                //printf("Curtype %x\n",curtype);
-                /*
-                if(tptr->res->type&EID){
-                    auto ttp=dynamic_cast<const NIdentifier*>(tptr->res);
-                    getchar();
-                    auto re=lookforname(ttp->name);
-                    getchar();
-                    if(re!=NULL){
-                        if(re->isIntegerTy())curtype|=EINT;
-                        if(re->isFloatTy())curtype|=EFLOAT;
-                    }
-                }
-                */
                 if((curtype&EINT)&&rettype->isIntegerTy()||(curtype&EFLOAT)&&rettype->isFloatTy()){
 
                 }else{
@@ -324,11 +322,23 @@ NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcde
                 return;
             }
             auto tmptype=(tmp->spe->type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
-            //TheModule->getOrInsertGlobal(tmp->vardec->id->name,tmptype);
             args.push_back(tmptype);
         }
         FunctionType *FT =FunctionType::get(rettype, args, false);
         TheModule->getOrInsertFunction(funcdef.id->name,FT);
+        auto F=TheModule->getFunction(funcdef.id->name);
+        auto iter=funcdef.dlist.vec.begin();
+
+        for(auto &arg : F->args()){
+            arg.setName((*iter)->vardec->id->name);
+            localmap[(*iter)->vardec->id->name]=&arg;
+            iter++;
+        }
+
+        curBasicBlock=BasicBlock::Create(*TheContext,funcdef.id->name,TheModule->getFunction(funcdef.id->name));
+        Builder->SetInsertPoint(curBasicBlock);
+        code.codegen();
+        localmap.clear();
     }
 }
 void NExtDecList::print(int i) const{
@@ -385,8 +395,10 @@ void NExpList::print(int i) const{
         }
     }
 }
+
 NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
     int tmptype=-1;
+
     if(type&EID){
         NIdentifier* ptr=dynamic_cast<NIdentifier*>(&pp);
         auto ttype=lookforname(ptr->name);
@@ -407,11 +419,12 @@ NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
             }
         }
     }
-    //printf("Tmpytype %x\n",tmptype);
+    this->type|=pp.type&(EINT|EFLOAT);
     if(tmptype!=-1){
         this->type|=tmptype;
     }
 }
+
 NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&lhs), rhs(&rhs){
     if(!(lhs.type&ERVAL)){
         err_info(6,this->lineno,"Rval appears on the right","");
@@ -419,7 +432,6 @@ NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&
     int tmptype=-1;
     this->type=lhs.type;
     tmptype=(this->type&EINT)?EINT:EFLOAT;
-    //printf("Type1 %x, Type 2 %x, tmp type %x\n",lhs.type,rhs.type,tmptype);
     if((tmptype!=-1)&&(!(tmptype&rhs.type))){
         err_info(5,this->lineno,"Assignment type mismatched","");
     }
@@ -476,7 +488,7 @@ void NStmt::print(int i) const{
     print_w(i);
     print_linno(this->lineno,"Stmt");
     this->ptr->print(i+2);
-    if(this->type!=1){
+    if(this->type==SNORMAL||this->type==SRETURN){
         print_w(i+2);
         std::printf("SEMI\n");
     }
@@ -692,42 +704,43 @@ void NStructMem::print(int i)const{
 }
 
 NStructMem::NStructMem(int lineno,const NExp& expr,const std::string member):lineno(lineno),expr(&expr){
-        this->member=new NIdentifier(lineno,member);
-        if(!(expr.type&ESTRUCT)){
-            err_info(13,this->lineno,"Getting member of a non-struct variable","");
+    this->member=new NIdentifier(lineno,member);
+    if(!(expr.type&ESTRUCT)){
+        err_info(13,this->lineno,"Getting member of a non-struct variable","");
+    }else{
+        if(stable.find(expr.structname)!=stable.end()){
+            err_info(21,this->lineno,"Getting member of a struct definition",expr.structname.c_str());
         }else{
-            if(stable.find(expr.structname)!=stable.end()){
-                err_info(21,this->lineno,"Getting member of a struct definition",expr.structname.c_str());
-            }else{
-                auto tmptype=lookforname(expr.structname);
-                std::string thename=tmptype->getStructName();
-                auto ttype=TheModule->getTypeByName(thename);
-                auto vartype=lookforname(member);
-                auto structname=ttype->getName();
-                unsigned int index=0;
-                for(index=0;index<stable[structname].size();index++){
-                    if(stable[structname][index]==member)break;
-                }
-                if(vartype==NULL||index==stable[structname].size()){
-                    err_info(13,this->lineno,"Getting a non-existing member",member.c_str());
-                }else{                    
-                    auto tmptype=ttype->getElementType(index);
-                    if(tmptype->isIntegerTy()){
-                        this->type|=EINT;
-                        this->type|=EID;
-                    }else if(tmptype->isFloatTy()){
-                        this->type|=EFLOAT;
-                        this->type|=EID;
-                    }else if(tmptype->isStructTy()){
-                        this->type|=ESTRUCT;
-                        this->structname=member;
-                    }else if(tmptype->isArrayTy()){
-                        this->type|=EARRAY;
-                    }
+            auto tmptype=lookforname(expr.structname);
+            std::string thename=tmptype->getStructName();
+            auto ttype=TheModule->getTypeByName(thename);
+            auto vartype=lookforname(member);
+            auto structname=ttype->getName();
+            unsigned int index=0;
+            for(index=0;index<stable[structname].size();index++){
+                if(stable[structname][index]==member)break;
+            }
+            if(vartype==NULL||index==stable[structname].size()){
+                err_info(13,this->lineno,"Getting a non-existing member",member.c_str());
+            }else{                    
+                auto tmptype=ttype->getElementType(index);
+                if(tmptype->isIntegerTy()){
+                    this->type|=EINT;
+                    this->type|=EID;
+                }else if(tmptype->isFloatTy()){
+                    this->type|=EFLOAT;
+                    this->type|=EID;
+                }else if(tmptype->isStructTy()){
+                    this->type|=ESTRUCT;
+                    this->structname=member;
+                }else if(tmptype->isArrayTy()){
+                    this->type|=EARRAY;
                 }
             }
         }
+    }
 }
+
 NArrayIndex::NArrayIndex(int lineno,NExp& arr,NExp& index):lineno(lineno),index(&index),arr(&arr){
     if(arr.type&EID){
         err_info(10,this->lineno,"Indexing a non-array variable","");
@@ -751,5 +764,195 @@ NBinaryOperator::NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :linen
     if((rhs.type&(EINT|EFLOAT))!=(lhs.type&(EINT|EFLOAT))){
         err_info(7,this->lineno,"Operands' type mismatch","");
     }
-    this->type=rhs.type&(EINT|EFLOAT);
+    this->type|=lhs.type&(EINT|EFLOAT);
+}
+
+Value* NDouble::codegen(){
+    this->codeval=ConstantFP::get(*TheContext,APFloat(this->value));
+    return this->codeval;
+}
+
+Value* NInteger::codegen(){
+    this->codeval=ConstantInt::get(*TheContext,APInt(32,this->value));
+    return this->codeval;
+}
+
+NDouble::NDouble(int lineno,double value) :lineno(lineno), value(value){
+}
+
+NInteger::NInteger(int lineno,std:: string& s):lineno(lineno){
+    endptr=NULL;
+    value=std::strtol(s.c_str(),&endptr,0);
+    if(*endptr!='\0'){
+        std::printf("Error type A at Line %d: \'Unknown Integer %s\'\n", yylineno, s.c_str());
+        std::exit(1);
+    }
+}
+
+Value* NReturnStmt::codegen(){    
+	this->res->codegen();
+	auto res=Builder->CreateRet(this->res->codeval);
+	return this->codeval=res;
+}
+
+NReturnStmt::NReturnStmt(int lineno,NExp& res):lineno(lineno),res(&res){
+}
+
+Value* NExp::codegen(){
+	if(ptr!=NULL){
+		return this->codeval=ptr->codegen();
+	}
+	return NULL;
+}
+
+Value* NIdentifier::codegen(){
+    this->codeval=TheModule->getGlobalVariable(name);
+    if(isStore==false){
+        return Builder->CreateLoad(this->codeval,"tmp");
+    }
+    else{
+        return this->codeval;
+    }
+}
+
+Value* NBinaryOperator::codegen(){
+	Value* L=lhs->codegen();
+	Value* R=rhs->codegen();
+
+	if(L==NULL||R==NULL){
+		return NULL;
+	}
+
+	switch(op){
+		case TAND:
+			return lhs->type&TINT?Builder->CreateAnd(L,R,"tmp_and"):Builder->CreateAnd(L,R,"tmp_and");
+		case TOR:
+			return lhs->type&TINT?Builder->CreateOr(L,R,"tmp_or"):Builder->CreateOr(L,R,"tmp_or");
+		case TMUL:
+			return lhs->type&TINT?Builder->CreateMul(L,R,"tmp_mul"):Builder->CreateFMul(L,R,"tmp_mul");
+		case TDIV:
+			return lhs->type&TINT?Builder->CreateUDiv(L,R,"tmp_div"):Builder->CreateFDiv(L,R,"tmp_div");
+		case TMINUS:
+			return lhs->type&TINT?Builder->CreateSub(L,R,"tmp_sub"):Builder->CreateFSub(L,R,"tmp_sub");
+		case TPLUS:
+			return lhs->type&TINT?Builder->CreateAdd(L,R,"tmp_add"):Builder->CreateFAdd(L,R,"tmp_add");
+		case TEQ:
+			return lhs->type&TINT?Builder->CreateICmpEQ(L,R,"tmp_eq"):Builder->CreateFCmpOEQ(L,R,"tmp_eq");
+		case TNE:
+			return lhs->type&TINT?Builder->CreateICmpNE(L,R,"tmp_neq"):Builder->CreateFCmpONE(L,R,"tmp_neq");
+		case TLT:
+			return (lhs->type&TINT)?Builder->CreateICmpSLT(L,R,"tmp_lt"):Builder->CreateFCmpOLT(L,R,"tmp_lt");
+		case TLE:
+			return lhs->type&TINT?Builder->CreateICmpSLE(L,R,"tmp_le"):Builder->CreateFCmpOLE(L,R,"tmp_le");
+		case TGT:
+			return lhs->type&TINT?Builder->CreateICmpSGT(L,R,"tmp_gt"):Builder->CreateFCmpOGT(L,R,"tmp_gt");
+		case TGE:
+			return lhs->type&TINT?Builder->CreateICmpSGE(L,R,"tmp_ge"):Builder->CreateFCmpOGE(L,R,"tmp_ge");
+		default:
+			return NULL;
+	}
+}
+
+Value* NUnaryOperator::codegen(){
+    auto R=rhs->codegen();
+    if(R==NULL){
+        return NULL;
+    }
+    switch(op){
+        case TNOT:
+            return this->codeval=Builder->CreateNot(R,"tmp_not");
+        case TMINUS:
+            return this->codeval=Builder->CreateNeg(R,"tmp_neg");
+        default:
+            return NULL;
+    }   
+}
+
+Value* NCompSt::codegen(){
+    /*
+    for(auto &local : defList.vec){
+        for(auto &eachone: local->dlist){
+            localmap[eachone->]
+        }
+    }*/
+    return klist.codegen();
+}
+
+Value* NStmtList::codegen(){
+    for(auto &l :this->vec){
+        l->codegen();
+    }
+    return NULL;
+}
+
+Value* NIfStmt::codegen(){
+    std::puts("Go if");
+    auto CondV=this->condition->codegen();
+    //CondV = Builder->CreateFCmpONE(CondV, ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
+    Function *TheFunction = Builder->GetInsertBlock()->getParent();
+    BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
+    BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
+    BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
+    
+    if(this->elstmt!=NULL){
+        Builder->CreateCondBr(CondV, ThenBB, ElseBB);
+    }else{
+        Builder->CreateCondBr(CondV, ThenBB, MergeBB);
+    }
+    
+
+    Builder->SetInsertPoint(ThenBB);
+    this->ifstmt->codegen();
+
+    Builder->CreateBr(MergeBB);
+    ThenBB = Builder->GetInsertBlock();
+
+    if(this->elstmt!=NULL){
+        TheFunction->getBasicBlockList().push_back(ElseBB);
+        Builder->SetInsertPoint(ElseBB);
+
+        this->elstmt->codegen();
+        Builder->CreateBr(MergeBB);
+        ElseBB = Builder->GetInsertBlock();
+    }
+    TheFunction->getBasicBlockList().push_back(MergeBB);
+    Builder->SetInsertPoint(MergeBB);
+    //PHINode *PN =Builder->CreatePHI(Type::getDoubleTy(TheContext), 2, "iftmp");
+
+    //PN->addIncoming(ThenV, ThenBB);
+    //PN->addIncoming(ElseV, ElseBB);
+    //return PN;
+    return NULL;
+}
+
+Value* NAssignment::codegen(){
+    isStore=true;
+    auto L=lhs->codegen();
+    isStore=false;
+    auto R=rhs->codegen();
+
+    if(L==NULL||R==NULL){
+        return NULL;
+    }
+    return Builder->CreateStore(L,R);
+}
+
+Value* NMethodCall::codegen(){
+    auto CalleeF=TheModule->getFunction(this->id->name);
+    if(!CalleeF){
+        return NULL;
+    }
+
+    if(CalleeF->arg_size()!=arguments.vec.size()){
+        return NULL;
+    }
+
+    std::vector<Value *> ArgsV;
+    for(auto &i: arguments.vec) {
+        ArgsV.push_back(i->codegen());
+        if (!ArgsV.back())
+            return NULL;
+    }
+
+    return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
 }

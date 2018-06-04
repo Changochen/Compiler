@@ -1,0 +1,9 @@
+int i;
+int main(int k){
+    if(k<2){
+        return 0;
+    }else{
+        i=(i+1)+1;
+    }
+    return i;
+}

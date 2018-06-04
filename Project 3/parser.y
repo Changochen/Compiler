@@ -142,12 +142,12 @@ StmtList :/* blank */ {$$=new NStmtList(yylineno);}
          | Stmt StmtList {$$=$2;$$->lineno=$1->lineno;$2->push_front($1);}
          ;
 /*$$=new NExp($1->lineno,*$1);*/
-Stmt  : Exp TSEMI {$$=new NStmt($1->lineno,*$$,1);}
-      | CompSt {$$=new NCompSt($1->lineno,*$1);$$=new NStmt($1->lineno,*$$,0);}
-      | TRETURN Exp TSEMI {$$=new NReturnStmt($2->lineno,*$2);$$=new NStmt($2->lineno,*$$,2);}
-      | TIF TLP Exp TRP Stmt {$$=new NIfStmt($3->lineno,*$3,*$5);$$=new NStmt($3->lineno,*$$,0);}
-      | TIF TLP Exp TRP Stmt TELSE Stmt {$$=new NIfStmt($3->lineno,*$3,*$5,*$7);$$=new NStmt($3->lineno,*$$,0);}
-      | TWHILE TLP Exp TRP Stmt {$$=new NWhileStmt($3->lineno,*$3,*$5);$$=new NStmt($3->lineno,*$$,0);}
+Stmt  : Exp TSEMI {$$=new NStmt($1->lineno,*$$,SNORMAL);}
+      | CompSt {$$=new NCompSt($1->lineno,*$1);$$=new NStmt($1->lineno,*$$,SCOMPST);}
+      | TRETURN Exp TSEMI {$$=new NReturnStmt($2->lineno,*$2);$$=new NStmt($2->lineno,*$$,SRETURN);}
+      | TIF TLP Exp TRP Stmt {$$=new NIfStmt($3->lineno,*$3,*$5);$$=new NStmt($3->lineno,*$$,SIF);}
+      | TIF TLP Exp TRP Stmt TELSE Stmt {$$=new NIfStmt($3->lineno,*$3,*$5,*$7);$$=new NStmt($3->lineno,*$$,SIFELSE);}
+      | TWHILE TLP Exp TRP Stmt {$$=new NWhileStmt($3->lineno,*$3,*$5);$$=new NStmt($3->lineno,*$$,SWHILE);}
       ;
 
 DefList:/*blank */ {$$=new NDefList(yylineno);} 
