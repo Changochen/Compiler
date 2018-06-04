@@ -16,60 +16,13 @@ std::map<std::string , Value*> localmap;
 Value* idx;
 bool isStore,isArr;
 
-void ContextStack::pop(){
-    delete CurContext;
-    CurContext=NULL;
-    if(!contextstack.empty()){
-        CurContext=contextstack.rbegin()->curContext;
-        CurModule=std::move(contextstack.rbegin()->curModule);
-        contextstack.pop_back();
-    }else{
-        CurModule=NULL;
-    }
-}
 
-Type* lookforname(std::string name){
-    if(CurContext!=NULL){
-        auto k=TheModule->getGlobalVariable(name);
-        if(k!=NULL){
-            return k->getValueType();
-        }
-    }
-    auto k=TheModule->getGlobalVariable(name);
-    if(k==NULL)return NULL;
-    else return k->getValueType();
-}
 
-void ContextStack::push(){
-    contextstack.push_back(ContextBlock(std::move(CurModule),CurContext));
-    CurContext=new LLVMContext();
-    CurModule=llvm::make_unique<Module>("Enter function",*CurContext);
-}
-
-void module_init(){
-    TheContext=new LLVMContext();
-    CurContext=NULL;
-    Builder=new IRBuilder<llvm::NoFolder>(*TheContext);
-    TheModule = llvm::make_unique<Module>("Program",*TheContext);
-    curBasicBlock=trueBlock=falseBlock=NULL;
-    isStore=false;
-}
-
-NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
-
-}
+/*print relative function */
 
 static void err_info(int type,int lineno,const char* msg,const char* more){
     printf("Error type %3d at Line %4d: %s ",type,lineno,msg);
     puts(more);
-}
-
-void Node::print(int i) const{
-    return;
-};
-
-void NExtDef::print(int i) const{
-    return;
 }
 
 void print_w(int i){
@@ -80,6 +33,14 @@ void print_w(int i){
 
 void print_linno (int lineno,const char* s){
     std::printf("%s (%d)\n",s,lineno);
+}
+
+void Node::print(int i) const{
+    return;
+};
+
+void NExtDef::print(int i) const{
+    return;
 }
 
 void NExtDefNormal::print(int i) const{
@@ -99,353 +60,6 @@ void NExtDefList::print(int i) const{
     for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
         (*iter)->print(i+2);
     }
-}
-
-Type* createStructType(std::string name,std::map<std::string,Type*>& ivec){
-    std::vector<Type*> members;
-    stable[name];
-    for(auto &k:ivec){
-        stable[name].push_back(k.first);
-        members.push_back(k.second);
-    }
-    auto s=StructType::create(*TheContext);
-    s->setName(name);
-    s->setBody(members);
-    return s;
-}
-
-Type* gettype(const NSpecifier &spe){
-    if(!spe.is_struct){
-        return spe.type==TTYPE_INT?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
-    }
-    return NULL;
-}
-
-Type* defineStructure(const NSpecifier &spe){
-    auto lineno=spe.lineno;
-    auto ptr=lookforname((spe.spe)->id->name);
-    std::map<std::string,Type*> ivec;
-    if(ptr==NULL){       
-        auto structptr=spe.spe;
-        for(auto &p1:structptr->defList.vec){
-            auto tmptype=gettype(*(p1->spe));
-            if(tmptype==NULL){  //if structure
-                auto sptr=defineStructure(*(p1->spe));
-                if(sptr!=NULL){
-                    if(ivec.find(p1->spe->spe->id->name)==ivec.end()){
-                        ivec[p1->spe->spe->id->name]=sptr;
-                    }
-                }
-            }else{
-                for(auto &p2:p1->dlist.vec){  //if normal var or array;
-                    if(p2->is_assign){
-                        err_info(15,p2->lineno,"Initialization in definition of stucture","");
-                        return NULL;
-                    }else{
-                        auto p3=p2->vardec;
-                        if(p3->next==NULL){
-                            if(ivec.find(p3->id->name)==ivec.end()){
-                                ivec[p3->id->name]=tmptype;
-                            }
-                            else{
-                                err_info(15,p2->lineno,"Collision of member definition","");
-                                return NULL;
-                            }
-                        }else{
-                            int total=1;
-                            auto arrptr=p3->next;
-                            while(arrptr->next!=NULL){
-                                total*=arrptr->length;
-                                arrptr=arrptr->next;
-                            }
-                            if(ivec.find(arrptr->id->name)==ivec.end()){
-                                ivec[arrptr->id->name]=ArrayType::get(tmptype,total);
-                            }
-                            else{
-                                err_info(15,p2->lineno,"Collision of member definition","");
-                                return NULL;
-                            }  
-                        }
-                    }
-                }
-            }
-        }
-        auto res=createStructType((spe.spe)->id->name,ivec);
-        TheModule->getOrInsertGlobal((spe.spe)->id->name,res);
-        return res;
-    }else{
-        err_info(3,lineno,"Redefined of structure",(spe.spe)->id->name.c_str());
-        return NULL;
-    }
-    return NULL;
-}
-
-NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
-    if(spe.is_struct){
-        if(spe.spe->is_def){
-            defineStructure(spe);
-        }      
-    }   
-}
-
-bool checkStructHasDef(const NSpecifier &spe){
-    if(!spe.is_struct)return false;
-    return stable.find(spe.spe->id->name)!=stable.end();
-}
-
-bool createVar(const NSpecifier &spe,const NVarDec &var){
-    auto type=gettype(spe);
-    std::string name;
-    int total=1;
-    bool is_arr=true;
-    auto next=&var;
-    if(next==NULL){
-        name=var.id->name;
-        is_arr=false;
-    }else{
-        while(next->next!=NULL){
-            total*=next->length;
-            next=next->next;
-        }
-        name=next->id->name;
-    }
-    if(type==NULL){
-        if(checkStructHasDef(spe)==false){
-            err_info(17,spe.lineno,"Structure is not defined","");
-            return false;
-        }else{
-            type=lookforname(spe.spe->id->name);
-        }
-    }
-    if(lookforname(name)!=NULL){
-        err_info(3,spe.lineno,"Redefined of variable",name.c_str());
-    }
-    if(total==1)is_arr=false;
-    //std::printf("Array length %d\n",total);
-    TheModule->getOrInsertGlobal(name,is_arr?ArrayType::get(type,total):type);
-    return true;
-}
-
-NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){
-    auto type=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
-    GlobalVariable* ptr;
-    for(auto &var : extlist.vec){
-        createVar(spe,*var);
-    }
-}
-
-NDef::NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno),spe(&spe),dlist(dlist){
-    for(auto &var:dlist.vec){
-        createVar(spe,*(var->vardec));
-    }
-}
-
-NCompSt::NCompSt(int lineno):lineno(lineno){
-
-}
-
-void NMethodCall::check(){
-    auto ttype=TheModule->getFunction(id->name);
-    bool flag=true;
-    if(ttype==NULL){
-        if(lookforname(id->name)){
-            err_info(11,this->lineno,"Calling a non-callable variable",id->name.c_str());
-            return;
-        }
-        err_info(2,this->lineno,"Use of undefined function",id->name.c_str());
-        return;
-    }
-    int i=0;
-    auto tttype=ttype->getFunctionType();
-    if(tttype->getReturnType()->isIntegerTy()){
-        this->type=EINT;
-    }else{
-        this->type=EFLOAT;
-    }
-    if(arguments.vec.size()==tttype->getNumParams()){
-        auto args=tttype->params();
-        for(auto iter=arguments.vec.begin();iter!=arguments.vec.end();iter++,i++){
-            if((((*iter)->type&EINT)&&args[i]->isIntegerTy())||(((*iter)->type&EFLOAT)&&args[i]->isFloatTy())){
-            }else{
-                flag=false;
-                break;
-            }
-        }
-    }else{
-        flag=false;
-    }
-    if(flag==false){
-        err_info(9,this->lineno,"Not matching function arguments",id->name.c_str());
-    }
-}
-
-NMethodCall::NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id){
-    arguments.vec.clear();
-    check();  
-}
-
-void NCompSt::add(NDefList& dlist,NStmtList& slist){
-    klist=slist;
-    defList=dlist;
-}
-
-void NVarList::push_front(NParamDec* ptr){
-    auto name1=ptr->vardec->id->name;
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        if(name1==(*iter)->vardec->id->name){
-            err_info(18,this->lineno,"Function args have collision name",name1.c_str());
-        }
-    }
-    this->vec.push_front(ptr);
-    createVar(*(ptr->spe),*(ptr->vardec));
-}
-
-
-NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){
-    std::vector<Type*> args;
-
-    if(TheModule->getFunction(funcdef.id->name)!=NULL){
-        err_info(4,lineno,"Redefined of function",funcdef.id->name.c_str());
-    }else{
-        auto rettype=(spe.type&TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
-        for(auto &retcheck:code.klist.vec){
-            if(retcheck->type==SRETURN){
-                auto tptr=dynamic_cast<const NReturnStmt*>(retcheck->ptr);
-                auto curtype=tptr->res->type;
-                if((curtype&EINT)&&rettype->isIntegerTy()||(curtype&EFLOAT)&&rettype->isFloatTy()){
-
-                }else{
-                    err_info(8,this->lineno,"type of return value mismatched","");
-                }
-            }
-        }
-        for(auto &tmp: funcdef.dlist.vec){
-            if(tmp->spe->is_struct){
-                err_info(19,lineno,"Not supported struct args yet","");
-                return;
-            }
-            auto tmptype=(tmp->spe->type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
-            args.push_back(tmptype);
-        }
-        FunctionType *FT =FunctionType::get(rettype, args, false);
-        TheModule->getOrInsertFunction(funcdef.id->name,FT);
-        auto F=TheModule->getFunction(funcdef.id->name);
-        auto iter=funcdef.dlist.vec.begin();
-
-        for(auto &arg : F->args()){
-            arg.setName((*iter)->vardec->id->name);
-            localmap[(*iter)->vardec->id->name]=&arg;
-            iter++;
-        }
-
-        curBasicBlock=BasicBlock::Create(*TheContext,funcdef.id->name,TheModule->getFunction(funcdef.id->name));
-        Builder->SetInsertPoint(curBasicBlock);
-        code.codegen();
-        localmap.clear();
-    }
-}
-void NExtDecList::print(int i) const{
-    print_w(i);
-    print_linno(this->lineno,"ExtDecList");
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        (*iter)->print(i+2);
-    }
-}
-
-void NStmtList::print(int i) const{
-    print_w(i);
-    print_linno(this->lineno,"StmtList");
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        (*iter)->print(i+2);
-    }
-}
-
-void NDecList::print(int i) const{
-    print_w(i);
-    print_linno(this->lineno,"DecList");
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        (*iter)->print(i+2);
-    }
-}
-
-void NVarList::print(int i) const{
-    print_w(i);
-    print_linno(this->lineno,"VarList");
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        (*iter)->print(i+2);
-        print_w(i+2);
-        std::printf("COMMA\n");
-    }
-}
-
-void NDefList::print(int i) const{
-    print_w(i);
-    print_linno(this->lineno,"DefList");
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        (*iter)->print(i+2);
-    }
-}
-
-void NExpList::print(int i) const{
-    print_w(i);
-    print_linno(this->lineno,"Args");
-    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
-        (*iter)->print(i+2);
-        if(true){
-            print_w(i+2);
-            std::printf("COMMA\n");
-            //iter--;
-        }
-    }
-}
-
-NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
-    int tmptype=-1;
-
-    if(type&EID){
-        NIdentifier* ptr=dynamic_cast<NIdentifier*>(&pp);
-        auto ttype=lookforname(ptr->name);
-        if(ttype==NULL){
-            err_info(1,this->lineno,"Use of undefine variable",ptr->name.c_str());
-        }else{
-            if(ttype->isIntegerTy()){
-                tmptype=EINT;
-            }else if(ttype->isFloatTy()){
-                tmptype=EFLOAT;
-            }else if(ttype->isArrayTy()){
-                tmptype=EARRAY;
-
-                if(ttype->getArrayElementType()->isIntegerTy()){
-                    tmptype|=EINT;
-                }else if(ttype->getArrayElementType()->isFloatTy()){
-                    tmptype|=EFLOAT;
-                }
-                this->type^=EID;
-            }else if(ttype->isStructTy()){
-                tmptype=ESTRUCT;
-                this->structname=ptr->name;
-                this->type^=EID;
-            }
-        }
-    }
-    this->type|=pp.type&(EINT|EFLOAT);
-    if(tmptype!=-1){
-        this->type|=tmptype;
-    }
-}
-
-NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&lhs), rhs(&rhs){
-    if(!(lhs.type&ERVAL)){
-        err_info(6,this->lineno,"Rval appears on the right","");
-    }
-    int tmptype=-1;
-    this->type|=lhs.type;
-    tmptype=(this->type&EINT)?EINT:EFLOAT;
-
-    if((tmptype!=-1)&&(!(tmptype&rhs.type))){
-        err_info(5,this->lineno,"Assignment type mismatched","");
-    }
-    this->type|=tmptype;
 }
 
 void NBlock::print(int i) const{
@@ -555,6 +169,61 @@ void NReturnStmt::print(int i) const{
     this->res->print(i);
     print_w(i);
     std::printf("SEMI\n");
+}
+
+void NExtDecList::print(int i) const{
+    print_w(i);
+    print_linno(this->lineno,"ExtDecList");
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        (*iter)->print(i+2);
+    }
+}
+
+void NStmtList::print(int i) const{
+    print_w(i);
+    print_linno(this->lineno,"StmtList");
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        (*iter)->print(i+2);
+    }
+}
+
+void NDecList::print(int i) const{
+    print_w(i);
+    print_linno(this->lineno,"DecList");
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        (*iter)->print(i+2);
+    }
+}
+
+void NVarList::print(int i) const{
+    print_w(i);
+    print_linno(this->lineno,"VarList");
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        (*iter)->print(i+2);
+        print_w(i+2);
+        std::printf("COMMA\n");
+    }
+}
+
+void NDefList::print(int i) const{
+    print_w(i);
+    print_linno(this->lineno,"DefList");
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        (*iter)->print(i+2);
+    }
+}
+
+void NExpList::print(int i) const{
+    print_w(i);
+    print_linno(this->lineno,"Args");
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        (*iter)->print(i+2);
+        if(true){
+            print_w(i+2);
+            std::printf("COMMA\n");
+            //iter--;
+        }
+    }
 }
 
 void NIfStmt::print(int i) const{
@@ -712,6 +381,275 @@ void NStructMem::print(int i)const{
     std::printf("DOT\n");
     this->member->print(i);
 }
+/* Util function */
+
+Type* createStructType(std::string name,std::map<std::string,Type*>& ivec){
+    std::vector<Type*> members;
+    stable[name];
+    for(auto &k:ivec){
+        stable[name].push_back(k.first);
+        members.push_back(k.second);
+    }
+    auto s=StructType::create(*TheContext);
+    s->setName(name);
+    s->setBody(members);
+    return s;
+}
+
+Type* lookforname(std::string name){
+    if(CurContext!=NULL){
+        auto k=TheModule->getGlobalVariable(name);
+        if(k!=NULL){
+            return k->getValueType();
+        }
+    }
+    auto k=TheModule->getGlobalVariable(name);
+    if(k==NULL)return NULL;
+    else return k->getValueType();
+}
+
+void module_init(){
+    TheContext=new LLVMContext();
+    CurContext=NULL;
+    Builder=new IRBuilder<llvm::NoFolder>(*TheContext);
+    TheModule = llvm::make_unique<Module>("Program",*TheContext);
+    curBasicBlock=trueBlock=falseBlock=NULL;
+    isStore=false;
+}
+
+Type* gettype(const NSpecifier &spe){
+    if(!spe.is_struct){
+        return spe.type==TTYPE_INT?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+    }
+    return NULL;
+}
+
+Type* defineStructure(const NSpecifier &spe){
+    auto lineno=spe.lineno;
+    auto ptr=lookforname((spe.spe)->id->name);
+    std::map<std::string,Type*> ivec;
+    if(ptr==NULL){       
+        auto structptr=spe.spe;
+        for(auto &p1:structptr->defList.vec){
+            auto tmptype=gettype(*(p1->spe));
+            if(tmptype==NULL){  //if structure
+                auto sptr=defineStructure(*(p1->spe));
+                if(sptr!=NULL){
+                    if(ivec.find(p1->spe->spe->id->name)==ivec.end()){
+                        ivec[p1->spe->spe->id->name]=sptr;
+                    }
+                }
+            }else{
+                for(auto &p2:p1->dlist.vec){  //if normal var or array;
+                    if(p2->is_assign){
+                        err_info(15,p2->lineno,"Initialization in definition of stucture","");
+                        return NULL;
+                    }else{
+                        auto p3=p2->vardec;
+                        if(p3->next==NULL){
+                            if(ivec.find(p3->id->name)==ivec.end()){
+                                ivec[p3->id->name]=tmptype;
+                            }
+                            else{
+                                err_info(15,p2->lineno,"Collision of member definition","");
+                                return NULL;
+                            }
+                        }else{
+                            int total=1;
+                            auto arrptr=p3->next;
+                            while(arrptr->next!=NULL){
+                                total*=arrptr->length;
+                                arrptr=arrptr->next;
+                            }
+                            if(ivec.find(arrptr->id->name)==ivec.end()){
+                                ivec[arrptr->id->name]=ArrayType::get(tmptype,total);
+                            }
+                            else{
+                                err_info(15,p2->lineno,"Collision of member definition","");
+                                return NULL;
+                            }  
+                        }
+                    }
+                }
+            }
+        }
+        auto res=createStructType((spe.spe)->id->name,ivec);
+        TheModule->getOrInsertGlobal((spe.spe)->id->name,res);
+        return res;
+    }else{
+        err_info(3,lineno,"Redefined of structure",(spe.spe)->id->name.c_str());
+        return NULL;
+    }
+    return NULL;
+}
+
+bool checkStructHasDef(const NSpecifier &spe){
+    if(!spe.is_struct)return false;
+    return stable.find(spe.spe->id->name)!=stable.end();
+}
+
+bool createVar(const NSpecifier &spe,const NVarDec &var){
+    auto type=gettype(spe);
+    std::string name;
+    int total=1;
+    bool is_arr=true;
+    auto next=&var;
+    if(next==NULL){
+        name=var.id->name;
+        is_arr=false;
+    }else{
+        while(next->next!=NULL){
+            total*=next->length;
+            next=next->next;
+        }
+        name=next->id->name;
+    }
+    if(type==NULL){
+        if(checkStructHasDef(spe)==false){
+            err_info(17,spe.lineno,"Structure is not defined","");
+            return false;
+        }else{
+            type=lookforname(spe.spe->id->name);
+        }
+    }
+    if(lookforname(name)!=NULL){
+        err_info(3,spe.lineno,"Redefined of variable",name.c_str());
+    }
+    if(total==1)is_arr=false;
+    //std::printf("Array length %d\n",total);
+    TheModule->getOrInsertGlobal(name,is_arr?ArrayType::get(type,total):type);
+    return true;
+}
+
+/* Constructor */
+
+NBlock::NBlock(int lineno,NExtDefList &llist):llist(&llist),lineno(lineno){
+
+}
+
+NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe):lineno(lineno),spe(&spe){
+    if(spe.is_struct){
+        if(spe.spe->is_def){
+            defineStructure(spe);
+        }      
+    }   
+}
+
+NExtDefNormal::NExtDefNormal(int lineno,const NSpecifier &spe,const NExtDecList& extlist):lineno(lineno),spe(&spe),extlist(extlist){
+    auto type=(spe.type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+    GlobalVariable* ptr;
+    for(auto &var : extlist.vec){
+        createVar(spe,*var);
+    }
+}
+
+NDef::NDef(int lineno,const NSpecifier& spe,const NDecList& dlist):lineno(lineno),spe(&spe),dlist(dlist){
+    for(auto &var:dlist.vec){
+        createVar(spe,*(var->vardec));
+    }
+}
+
+NCompSt::NCompSt(int lineno):lineno(lineno){
+
+}
+
+NMethodCall::NMethodCall(int lineno,const NIdentifier& id) : lineno(lineno),id(&id){
+    arguments.vec.clear();
+    check();  
+}
+
+NExtDefFunc::NExtDefFunc(int lineno,const NSpecifier &spe,const NFuncDec& funcdef,NCompSt& code):lineno(lineno),spe(&spe),funcdef(&funcdef),code(&code){
+    std::vector<Type*> args;
+
+    if(TheModule->getFunction(funcdef.id->name)!=NULL){
+        err_info(4,lineno,"Redefined of function",funcdef.id->name.c_str());
+    }else{
+        auto rettype=(spe.type&TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+        for(auto &retcheck:code.klist.vec){
+            if(retcheck->type==SRETURN){
+                auto tptr=dynamic_cast<const NReturnStmt*>(retcheck->ptr);
+                auto curtype=tptr->res->type;
+                if((curtype&EINT)&&rettype->isIntegerTy()||(curtype&EFLOAT)&&rettype->isFloatTy()){
+
+                }else{
+                    err_info(8,this->lineno,"type of return value mismatched","");
+                }
+            }
+        }
+        for(auto &tmp: funcdef.dlist.vec){
+            if(tmp->spe->is_struct){
+                err_info(19,lineno,"Not supported struct args yet","");
+                return;
+            }
+            auto tmptype=(tmp->spe->type==TTYPE_INT)?Type::getInt32Ty(*TheContext):Type::getFloatTy(*TheContext);
+            args.push_back(tmptype);
+        }
+        FunctionType *FT =FunctionType::get(rettype, args, false);
+        TheModule->getOrInsertFunction(funcdef.id->name,FT);
+        auto F=TheModule->getFunction(funcdef.id->name);
+        auto iter=funcdef.dlist.vec.begin();
+
+        for(auto &arg : F->args()){
+            arg.setName((*iter)->vardec->id->name);
+            localmap[(*iter)->vardec->id->name]=&arg;
+            iter++;
+        }
+
+        curBasicBlock=BasicBlock::Create(*TheContext,funcdef.id->name,TheModule->getFunction(funcdef.id->name));
+        Builder->SetInsertPoint(curBasicBlock);
+        code.codegen();
+        localmap.clear();
+    }
+}
+
+NAssignment::NAssignment(int lineno,NExp& lhs, NExp& rhs) : lineno(lineno),lhs(&lhs), rhs(&rhs){
+    if(!(lhs.type&ERVAL)){
+        err_info(6,this->lineno,"Rval appears on the right","");
+    }
+    int tmptype=-1;
+    this->type|=lhs.type;
+    tmptype=(this->type&EINT)?EINT:EFLOAT;
+
+    if((tmptype!=-1)&&(!(tmptype&rhs.type))){
+        err_info(5,this->lineno,"Assignment type mismatched","");
+    }
+    this->type|=tmptype;
+}
+
+NExp::NExp(int lineno,NExp& pp,int type):lineno(lineno),ptr(&pp),type(type){
+    int tmptype=-1;
+
+    if(type&EID){
+        NIdentifier* ptr=dynamic_cast<NIdentifier*>(&pp);
+        auto ttype=lookforname(ptr->name);
+        if(ttype==NULL){
+            err_info(1,this->lineno,"Use of undefine variable",ptr->name.c_str());
+        }else{
+            if(ttype->isIntegerTy()){
+                tmptype=EINT;
+            }else if(ttype->isFloatTy()){
+                tmptype=EFLOAT;
+            }else if(ttype->isArrayTy()){
+                tmptype=EARRAY;
+
+                if(ttype->getArrayElementType()->isIntegerTy()){
+                    tmptype|=EINT;
+                }else if(ttype->getArrayElementType()->isFloatTy()){
+                    tmptype|=EFLOAT;
+                }
+                this->type^=EID;
+            }else if(ttype->isStructTy()){
+                tmptype=ESTRUCT;
+                this->structname=ptr->name;
+                this->type^=EID;
+            }
+        }
+    }
+    this->type|=pp.type&(EINT|EFLOAT);
+    if(tmptype!=-1){
+        this->type|=tmptype;
+    }
+}
 
 NStructMem::NStructMem(int lineno,NExp& expr,std::string member):lineno(lineno),expr(&expr){
     this->member=new NIdentifier(lineno,member);
@@ -777,16 +715,6 @@ NBinaryOperator::NBinaryOperator(int lineno,NExp& lhs, int op, NExp& rhs) :linen
     this->type|=lhs.type&(EINT|EFLOAT);
 }
 
-Value* NDouble::codegen(){
-    this->codeval=ConstantFP::get(*TheContext,APFloat(this->value));
-    return this->codeval;
-}
-
-Value* NInteger::codegen(){
-    this->codeval=ConstantInt::get(*TheContext,APInt(32,this->value));
-    return this->codeval;
-}
-
 NDouble::NDouble(int lineno,double value) :lineno(lineno), value(value){
 }
 
@@ -799,13 +727,96 @@ NInteger::NInteger(int lineno,std:: string& s):lineno(lineno){
     }
 }
 
+NReturnStmt::NReturnStmt(int lineno,NExp& res):lineno(lineno),res(&res){
+}
+
+/* member function */
+
+void NMethodCall::check(){
+    auto ttype=TheModule->getFunction(id->name);
+    bool flag=true;
+    if(ttype==NULL){
+        if(lookforname(id->name)){
+            err_info(11,this->lineno,"Calling a non-callable variable",id->name.c_str());
+            return;
+        }
+        err_info(2,this->lineno,"Use of undefined function",id->name.c_str());
+        return;
+    }
+    int i=0;
+    auto tttype=ttype->getFunctionType();
+    if(tttype->getReturnType()->isIntegerTy()){
+        this->type=EINT;
+    }else{
+        this->type=EFLOAT;
+    }
+    if(arguments.vec.size()==tttype->getNumParams()){
+        auto args=tttype->params();
+        for(auto iter=arguments.vec.begin();iter!=arguments.vec.end();iter++,i++){
+            if((((*iter)->type&EINT)&&args[i]->isIntegerTy())||(((*iter)->type&EFLOAT)&&args[i]->isFloatTy())){
+            }else{
+                flag=false;
+                break;
+            }
+        }
+    }else{
+        flag=false;
+    }
+    if(flag==false){
+        err_info(9,this->lineno,"Not matching function arguments",id->name.c_str());
+    }
+}
+
+void NCompSt::add(NDefList& dlist,NStmtList& slist){
+    klist=slist;
+    defList=dlist;
+}
+
+void NVarList::push_front(NParamDec* ptr){
+    auto name1=ptr->vardec->id->name;
+    for(auto iter=this->vec.begin();iter!=this->vec.end();iter++){
+        if(name1==(*iter)->vardec->id->name){
+            err_info(18,this->lineno,"Function args have collision name",name1.c_str());
+        }
+    }
+    this->vec.push_front(ptr);
+    createVar(*(ptr->spe),*(ptr->vardec));
+}
+
+void ContextStack::push(){
+    contextstack.push_back(ContextBlock(std::move(CurModule),CurContext));
+    CurContext=new LLVMContext();
+    CurModule=llvm::make_unique<Module>("Enter function",*CurContext);
+}
+
+void ContextStack::pop(){
+    delete CurContext;
+    CurContext=NULL;
+    if(!contextstack.empty()){
+        CurContext=contextstack.rbegin()->curContext;
+        CurModule=std::move(contextstack.rbegin()->curModule);
+        contextstack.pop_back();
+    }else{
+        CurModule=NULL;
+    }
+}
+
+/* Code generate function */
+
+Value* NDouble::codegen(){
+    this->codeval=ConstantFP::get(*TheContext,APFloat(this->value));
+    return this->codeval;
+}
+
+Value* NInteger::codegen(){
+    this->codeval=ConstantInt::get(*TheContext,APInt(32,this->value));
+    return this->codeval;
+}
+
 Value* NReturnStmt::codegen(){    
 	this->res->codegen();
 	auto res=Builder->CreateRet(this->res->codeval);
 	return this->codeval=res;
-}
-
-NReturnStmt::NReturnStmt(int lineno,NExp& res):lineno(lineno),res(&res){
 }
 
 Value* NExp::codegen(){
