@@ -474,7 +474,7 @@ Type* defineStructure(const NSpecifier &spe){
             }
         }
         auto res=createStructType((spe.spe)->id->name,ivec);
-        TheModule->getOrInsertGlobal((spe.spe)->id->name,res);
+        auto useless=new GlobalVariable(*TheModule,res,false,GlobalValue::CommonLinkage,Constant::getNullValue(res),(spe.spe)->id->name);
         return res;
     }else{
         err_info(3,lineno,"Redefined of structure",(spe.spe)->id->name.c_str());
@@ -516,8 +516,7 @@ bool createVar(const NSpecifier &spe,const NVarDec &var){
         err_info(3,spe.lineno,"Redefined of variable",name.c_str());
     }
     if(total==1)is_arr=false;
-    //std::printf("Array length %d\n",total);
-    TheModule->getOrInsertGlobal(name,is_arr?ArrayType::get(type,total):type);
+    auto useless=new GlobalVariable(*TheModule,is_arr?ArrayType::get(type,total):type,false,GlobalValue::CommonLinkage,Constant::getNullValue(is_arr?ArrayType::get(type,total):type),name);
     return true;
 }
 
@@ -948,7 +947,7 @@ Value* NAssignment::codegen(){
         return NULL;
     }
 
-    return Builder->CreateStore(L,R);
+    return Builder->CreateStore(R,L);
 }
 
 Value* NMethodCall::codegen(){
@@ -978,6 +977,8 @@ Value* NWhileStmt::codegen(){
     BasicBlock *bodyBB = BasicBlock::Create(*TheContext, "body");
     BasicBlock *nextBB = BasicBlock::Create(*TheContext, "next");
 
+
+    Builder->CreateBr(preBB);
 
     Builder->SetInsertPoint(preBB);
     auto CondV=this->condition->codegen();
