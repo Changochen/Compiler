@@ -1,7 +1,10 @@
 int k;
+
 int main(){
-    while(k<233){
+    while(k<0x200){
         k=k+1;
     }
-    return k;
+    output=k;
+    writeint32();
+    return 0;
 }

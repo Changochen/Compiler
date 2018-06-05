@@ -408,6 +408,14 @@ Type* lookforname(std::string name){
     else return k->getValueType();
 }
 
+void addio(){
+    std::vector<Type*> args;
+    TheModule->getOrInsertGlobal("output",Type::getInt32Ty(*TheContext));
+    FunctionType *FT =FunctionType::get(Type::getInt32Ty(*TheContext), args, false);
+    Function *readfunc = Function::Create(FT, Function::ExternalLinkage,"readint32", &(*TheModule));
+    Function *writefunc = Function::Create(FT, Function::ExternalLinkage,"writeint32", &(*TheModule));
+}
+
 void module_init(){
     TheContext=new LLVMContext();
     CurContext=NULL;
@@ -415,6 +423,7 @@ void module_init(){
     TheModule = llvm::make_unique<Module>("Program",*TheContext);
     curBasicBlock=trueBlock=falseBlock=NULL;
     isStore=false;
+    addio();
 }
 
 Type* gettype(const NSpecifier &spe){
@@ -519,6 +528,7 @@ bool createVar(const NSpecifier &spe,const NVarDec &var){
     auto useless=new GlobalVariable(*TheModule,is_arr?ArrayType::get(type,total):type,false,GlobalValue::CommonLinkage,Constant::getNullValue(is_arr?ArrayType::get(type,total):type),name);
     return true;
 }
+
 
 /* Constructor */
 

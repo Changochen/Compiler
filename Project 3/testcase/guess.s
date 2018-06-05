@@ -8,16 +8,21 @@ main:                                   # @main
 # %bb.0:                                # %main
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	cmpl	$511, k(%rip)           # imm = 0x1FF
-	jg	.LBB0_3
+	movl	$0, res(%rip)
+	movl	$563, guess(%rip)       # imm = 0x233
+	jmp	.LBB0_1
 	.p2align	4, 0x90
 .LBB0_2:                                # %body
+                                        #   in Loop: Header=BB0_1 Depth=1
+	callq	readint32
+	movl	%eax, res(%rip)
+.LBB0_1:                                # %con
                                         # =>This Inner Loop Header: Depth=1
-	incl	k(%rip)
-	cmpl	$511, k(%rip)           # imm = 0x1FF
-	jle	.LBB0_2
-.LBB0_3:                                # %next
-	movl	k(%rip), %eax
+	movl	guess(%rip), %eax
+	cmpl	res(%rip), %eax
+	jne	.LBB0_2
+# %bb.3:                                # %next
+	movl	guess(%rip), %eax
 	movl	%eax, output(%rip)
 	callq	writeint32
 	xorl	%eax, %eax
@@ -27,7 +32,9 @@ main:                                   # @main
 	.size	main, .Lfunc_end0-main
 	.cfi_endproc
                                         # -- End function
-	.type	k,@object               # @k
-	.comm	k,4,4
+	.type	guess,@object           # @guess
+	.comm	guess,4,4
+	.type	res,@object             # @res
+	.comm	res,4,4
 
 	.section	".note.GNU-stack","",@progbits
