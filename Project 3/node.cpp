@@ -15,23 +15,26 @@ BasicBlock* curBasicBlock,*trueBlock,*falseBlock;
 std::map<std::string , Value*> localmap;
 Value* idx;
 bool isStore,isArr;
-
+bool debug=false;
 
 
 /*print relative function */
 
 static void err_info(int type,int lineno,const char* msg,const char* more){
+    if(debug==false)return ;
     printf("Error type %3d at Line %4d: %s ",type,lineno,msg);
     puts(more);
 }
 
 void print_w(int i){
+    if(debug==false)return ;
     for(int j=0;j<i;j++){
         std::cout<<" ";
     }
 }
 
 void print_linno (int lineno,const char* s){
+    if(debug==false)return ;
     std::printf("%s (%d)\n",s,lineno);
 }
 
